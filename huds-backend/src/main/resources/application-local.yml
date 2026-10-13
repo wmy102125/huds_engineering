@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: huds-backend
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/huds}
+    username: ${DB_USERNAME:huds}
+    password: ${DB_PASSWORD:huds_dev}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+  shutdown: graceful
+
+spring.lifecycle:
+  timeout-per-shutdown-phase: 20s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+info:
+  app:
+    name: HADS Backend
+    description: Hugo's Appliance Diagnostic System API
+
+logging:
+  level:
+    root: INFO
+    com.hugo.huds: INFO
+    org.springframework.security: INFO

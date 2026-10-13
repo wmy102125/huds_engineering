@@ -1,6 +1,6 @@
 -- HADS Phase 1 baseline DDL | PostgreSQL 17+ | 2026-10-07
 -- Review before production. Application must enforce state machines, authorization and evidence immutability.
-BEGIN;
+--BEGIN;
 CREATE TABLE sys_users (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), display_name text NOT NULL, email text UNIQUE NOT NULL, role text NOT NULL CHECK(role IN ('TECHNICIAN','REVIEWER','ADMIN')), active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE customers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), display_name text NOT NULL, phone text, email text, notes text, archived_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(), row_version bigint NOT NULL DEFAULT 0);
 CREATE TABLE service_addresses (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), customer_id uuid REFERENCES customers(id) ON DELETE RESTRICT, line1 text NOT NULL, line2 text, city text NOT NULL, province text NOT NULL DEFAULT 'NS', postal_code text, country text NOT NULL DEFAULT 'CA', row_version bigint NOT NULL DEFAULT 0, archived_at timestamptz);
@@ -44,4 +44,4 @@ CREATE TABLE knowledge_evidence (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), 
 CREATE TABLE sync_mutations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), actor_user_id uuid NOT NULL REFERENCES sys_users(id) ON DELETE RESTRICT, client_mutation_id uuid NOT NULL, device_id text NOT NULL, entity_type text NOT NULL, entity_id uuid NOT NULL, operation text NOT NULL, status text NOT NULL CHECK(status IN ('ACCEPTED','REJECTED')), response_payload jsonb NOT NULL DEFAULT '{}'::jsonb, processed_at timestamptz NOT NULL DEFAULT now(), UNIQUE(actor_user_id,client_mutation_id));
 CREATE TABLE audit_events (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), actor_user_id uuid REFERENCES sys_users(id) ON DELETE RESTRICT, event_type text NOT NULL, entity_type text NOT NULL, entity_id uuid, correlation_id text, metadata jsonb NOT NULL DEFAULT '{}'::jsonb, occurred_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX ix_audit_entity ON audit_events(entity_type,entity_id,occurred_at DESC);
-COMMIT;
+--COMMIT;
