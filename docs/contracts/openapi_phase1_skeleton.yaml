@@ -1,0 +1,149 @@
+openapi: 3.1.0
+info:
+  title: HADS Phase 1 REST API — Contract Skeleton
+  version: 1.0.0-draft
+  description: >
+    Engineering skeleton only. Add full domain request/response schemas and
+    security/error tests before implementation. All state transitions server-validated.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /appliances:
+    post:
+      operationId: createAppliance
+      summary: Create an appliance identity
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApplianceCreate' }
+      responses:
+        '201': { description: Created }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /cases:
+    post:
+      operationId: createCase
+      summary: Open diagnostic case
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaseCreate' }
+      responses:
+        '201': { description: Created }
+  /cases/{caseId}/transitions:
+    post:
+      operationId: transitionCase
+      summary: Server-validated state transition
+      parameters:
+        - { $ref: '#/components/parameters/CaseId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransitionRequest' }
+      responses:
+        '200': { description: Transition accepted }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '412': { description: Safety or authorization gate not satisfied }
+  /cases/{caseId}/visits:
+    post:
+      operationId: createVisit
+      summary: Add service visit
+      parameters: [{ $ref: '#/components/parameters/CaseId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      responses: { '201': { description: Created } }
+  /sync/mutations:
+    post:
+      operationId: submitMutations
+      summary: Submit idempotent offline mutation batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mutations]
+              properties:
+                mutations:
+                  type: array
+                  maxItems: 100
+                  items: { $ref: '#/components/schemas/Mutation' }
+      responses:
+        '200': { description: Per-mutation ACKs, rejects, and conflicts }
+        '401': { description: Authentication required }
+  /cases/{caseId}/report:
+    get:
+      operationId: getCaseReport
+      summary: Download repair report
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200':
+          description: PDF report
+          content: { application/pdf: { schema: { type: string, format: binary } } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    CaseId: { name: caseId, in: path, required: true, schema: { type: string, format: uuid } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Conflict:
+      description: Version conflict or invalid transition
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    ApplianceCreate:
+      type: object
+      required: [id, applianceType]
+      properties:
+        id: { type: string, format: uuid }
+        applianceType: { type: string }
+        brand: { type: [string, 'null'] }
+        modelNo: { type: [string, 'null'] }
+        serialNo: { type: [string, 'null'] }
+    CaseCreate:
+      type: object
+      required: [id, applianceId, reportedSymptoms]
+      properties:
+        id: { type: string, format: uuid }
+        applianceId: { type: string, format: uuid }
+        reportedSymptoms: { type: string, minLength: 1 }
+    TransitionRequest:
+      type: object
+      required: [toState, baseVersion, reason]
+      properties:
+        toState: { type: string }
+        baseVersion: { type: integer, minimum: 0 }
+        reason: { type: string }
+    Mutation:
+      type: object
+      required: [mutationId, deviceId, entityType, entityId, operation, payload]
+      properties:
+        mutationId: { type: string, format: uuid }
+        deviceId: { type: string }
+        entityType: { type: string }
+        entityId: { type: string, format: uuid }
+        operation: { type: string, enum: [CREATE, APPEND, UPDATE, TRANSITION] }
+        baseVersion: { type: [integer, 'null'], minimum: 0 }
+        dependsOn: { type: array, items: { type: string } }
+        payload: { type: object, additionalProperties: true }
+    Error:
+      type: object
+      required: [code, message, retryable]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        retryable: { type: boolean }
+        currentVersion: { type: [integer, 'null'] }
+        correlationId: { type: string }
+
+# v1.1 设计注记：本 API 同时供 Desktop Web 和 Mobile Web/PWA 使用。
+# 对可变聚合更新应要求 If-Match/expected_revision；冲突返回 412/409。
+# 已提交诊断证据追加写入，不允许客户端以 PUT 覆盖原始事实。
+# 此文件仍为 skeleton，完整端点及 Schema 必须在实施前补齐。
