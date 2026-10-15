@@ -18,16 +18,16 @@ import java.util.UUID;
  * to create or update this table.</p>
  */
 @Entity
-@Table(name = "sys_users")
-public class SysUsers {
+@Table(name = "users")
+public class Users {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
-  @Column(name = "id", nullable = false, updatable = false)
+  @Column(name = "user_id", nullable = false, updatable = false)
   private UUID id;
 
-  @Column(name = "display_name", nullable = false)
-  private String displayName;
+  @Column(name = "user_name", nullable = false)
+  private String userName;
 
   @Column(name = "email", nullable = false, unique = true)
   private String email;
@@ -45,7 +45,7 @@ public class SysUsers {
   @Column(name = "password_hash", length = 100)
   private String passwordHash;
 
-  public SysUsers() {
+  public Users() {
     // Required by JPA.
   }
 
@@ -57,12 +57,12 @@ public class SysUsers {
     this.id = id;
   }
 
-  public String getDisplayName() {
-    return displayName;
+  public String getUserName() {
+    return userName;
   }
 
-  public void setDisplayName(String displayName) {
-    this.displayName = displayName;
+  public void setUserName(String userName) {
+    this.userName = userName;
   }
 
   public String getEmail() {

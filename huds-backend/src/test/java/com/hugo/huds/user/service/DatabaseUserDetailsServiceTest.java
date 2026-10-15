@@ -1,7 +1,7 @@
 package com.hugo.huds.user.service;
 
-import com.hugo.huds.user.entity.SysUsers;
-import com.hugo.huds.user.repository.SysUsersRepository;
+import com.hugo.huds.user.entity.Users;
+import com.hugo.huds.user.repository.UsersRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,22 +24,22 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 public class DatabaseUserDetailsServiceTest {
     @Mock
-    private SysUsersRepository sysUsersRepository;
+    private UsersRepository usersRepository;
     @InjectMocks
     private DatabaseUserDetailsService databaseUserDetailsService;
 
     @Test
     public void findUserTest() {
         String userName = "test@example.com";
-        SysUsers sysUsers = new SysUsers();
-        sysUsers.setEmail(userName);
-        sysUsers.setActive(true);
-        sysUsers.setId(UUID.randomUUID());
-        sysUsers.setRole("ADMIN");
-        sysUsers.setDisplayName("test");
-        sysUsers.setPasswordHash("2!xudfyduy6w3270");
+        Users users = new Users();
+        users.setEmail(userName);
+        users.setActive(true);
+        users.setId(UUID.randomUUID());
+        users.setRole("ADMIN");
+        users.setUserName("test");
+        users.setPasswordHash("2!xudfyduy6w3270");
 
-        when(sysUsersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(sysUsers));
+        when(usersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(users));
 
         UserDetails userDetails = databaseUserDetailsService.loadUserByUsername(userName);
         assertNotNull(userDetails);
@@ -48,12 +48,12 @@ public class DatabaseUserDetailsServiceTest {
         assertTrue(userDetails.isEnabled());
         assertTrue(userDetails.getAuthorities().stream().anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_ADMIN")));
 
-        verify(sysUsersRepository).findByEmailIgnoreCase(userName);
+        verify(usersRepository).findByEmailIgnoreCase(userName);
     }
 
     @Test
     public void userNotFoundTest() {
-        when(sysUsersRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.empty());
+        when(usersRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.empty());
 
         assertThrows(UsernameNotFoundException.class, () -> databaseUserDetailsService.loadUserByUsername("test@example.com"));
     }
@@ -61,14 +61,14 @@ public class DatabaseUserDetailsServiceTest {
     @Test
     public void userDisabled() {
         String userName = "test@example.com";
-        SysUsers sysUsers = new SysUsers();
-        sysUsers.setEmail(userName);
-        sysUsers.setActive(false);
-        sysUsers.setId(UUID.randomUUID());
-        sysUsers.setRole("ADMIN");
-        sysUsers.setDisplayName("test");
-        sysUsers.setPasswordHash("2!xudfyduy6w3270");
-        when(sysUsersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(sysUsers));
+        Users users = new Users();
+        users.setEmail(userName);
+        users.setActive(false);
+        users.setId(UUID.randomUUID());
+        users.setRole("ADMIN");
+        users.setUserName("test");
+        users.setPasswordHash("2!xudfyduy6w3270");
+        when(usersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(users));
 
         UserDetails userDetails = databaseUserDetailsService.loadUserByUsername(userName);
         assertFalse(userDetails.isEnabled());
@@ -77,14 +77,14 @@ public class DatabaseUserDetailsServiceTest {
     @Test
     public void userPasswordNull() {
         String userName = "test@example.com";
-        SysUsers sysUsers = new SysUsers();
-        sysUsers.setEmail(userName);
-        sysUsers.setActive(false);
-        sysUsers.setId(UUID.randomUUID());
-        sysUsers.setRole("ADMIN");
-        sysUsers.setDisplayName("test");
+        Users users = new Users();
+        users.setEmail(userName);
+        users.setActive(false);
+        users.setId(UUID.randomUUID());
+        users.setRole("ADMIN");
+        users.setUserName("test");
 
-        when(sysUsersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(sysUsers));
+        when(usersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(users));
         assertThrows(UsernameNotFoundException.class, () -> databaseUserDetailsService.loadUserByUsername(userName));
     }
 

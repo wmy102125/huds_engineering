@@ -1,7 +1,7 @@
 package com.hugo.huds.user.service;
 
-import com.hugo.huds.user.entity.SysUsers;
-import com.hugo.huds.user.repository.SysUsersRepository;
+import com.hugo.huds.user.entity.Users;
+import com.hugo.huds.user.repository.UsersRepository;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -16,10 +16,10 @@ import org.springframework.util.StringUtils;
 @Service
 public class DatabaseUserDetailsService implements UserDetailsService {
 
-    private final SysUsersRepository sysUsersRepository;
+    private final UsersRepository usersRepository;
 
-    public DatabaseUserDetailsService(SysUsersRepository sysUsersRepository) {
-        this.sysUsersRepository = sysUsersRepository;
+    public DatabaseUserDetailsService(UsersRepository usersRepository) {
+        this.usersRepository = usersRepository;
     }
 
     @Override
@@ -27,14 +27,14 @@ public class DatabaseUserDetailsService implements UserDetailsService {
         if (!StringUtils.hasText(username)) {
             throw new IllegalArgumentException("Username can not be blank!");
         }
-        SysUsers sysUsers = sysUsersRepository.findByEmailIgnoreCase(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        Users users = usersRepository.findByEmailIgnoreCase(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        if (!StringUtils.hasText(sysUsers.getPasswordHash())) {
+        if (!StringUtils.hasText(users.getPasswordHash())) {
             throw new UsernameNotFoundException("User not found");
         }
-        return User.withUsername(sysUsers.getEmail())
-                .password(sysUsers.getPasswordHash())
-                .authorities("ROLE_" + sysUsers.getRole())
-                .disabled(!Boolean.TRUE.equals(sysUsers.getActive())).build();
+        return User.withUsername(users.getEmail())
+                .password(users.getPasswordHash())
+                .authorities("ROLE_" + users.getRole())
+                .disabled(!Boolean.TRUE.equals(users.getActive())).build();
     }
 }
