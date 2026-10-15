@@ -24,7 +24,7 @@ public class Users {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   @Column(name = "user_id", nullable = false, updatable = false)
-  private UUID id;
+  private UUID userId;
 
   @Column(name = "user_name", nullable = false)
   private String userName;
@@ -49,12 +49,12 @@ public class Users {
     // Required by JPA.
   }
 
-  public UUID getId() {
-    return id;
+  public UUID getUserId() {
+    return userId;
   }
 
-  public void setId(UUID id) {
-    this.id = id;
+  public void setUserId(UUID userId) {
+    this.userId = userId;
   }
 
   public String getUserName() {

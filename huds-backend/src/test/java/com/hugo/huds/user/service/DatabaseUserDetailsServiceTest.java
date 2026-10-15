@@ -34,7 +34,7 @@ public class DatabaseUserDetailsServiceTest {
         Users users = new Users();
         users.setEmail(userName);
         users.setActive(true);
-        users.setId(UUID.randomUUID());
+        users.setUserId(UUID.randomUUID());
         users.setRole("ADMIN");
         users.setUserName("test");
         users.setPasswordHash("2!xudfyduy6w3270");
@@ -64,7 +64,7 @@ public class DatabaseUserDetailsServiceTest {
         Users users = new Users();
         users.setEmail(userName);
         users.setActive(false);
-        users.setId(UUID.randomUUID());
+        users.setUserId(UUID.randomUUID());
         users.setRole("ADMIN");
         users.setUserName("test");
         users.setPasswordHash("2!xudfyduy6w3270");
@@ -80,7 +80,7 @@ public class DatabaseUserDetailsServiceTest {
         Users users = new Users();
         users.setEmail(userName);
         users.setActive(false);
-        users.setId(UUID.randomUUID());
+        users.setUserId(UUID.randomUUID());
         users.setRole("ADMIN");
         users.setUserName("test");
 
