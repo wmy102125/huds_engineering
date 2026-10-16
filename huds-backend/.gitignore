@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# my test files
+jar.txt
+login*.json

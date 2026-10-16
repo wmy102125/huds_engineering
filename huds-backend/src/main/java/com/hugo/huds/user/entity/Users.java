@@ -44,6 +44,14 @@ public class Users {
 
   @Column(name = "password_hash", length = 100)
   private String passwordHash;
+  @Column(name = "failed_login_attempts", nullable = false)
+  private int failedLoginAttempts;
+
+  @Column(name = "locked_until")
+  private Instant lockedUntil;
+
+  @Column(name = "password_changed_at")
+  private Instant passwordChangedAt;
 
   public Users() {
     // Required by JPA.
@@ -56,6 +64,7 @@ public class Users {
   public void setUserId(UUID userId) {
     this.userId = userId;
   }
+
 
   public String getUserName() {
     return userName;
@@ -101,7 +110,32 @@ public class Users {
     return passwordHash;
   }
 
+  public int getFailedLoginAttempts() {
+    return failedLoginAttempts;
+  }
+
+  public void setFailedLoginAttempts(int failedLoginAttempts) {
+    this.failedLoginAttempts = failedLoginAttempts;
+  }
+
+  public Instant getLockedUntil() {
+    return lockedUntil;
+  }
+
+  public void setLockedUntil(Instant lockedUntil) {
+    this.lockedUntil = lockedUntil;
+  }
+
+  public Instant getPasswordChangedAt() {
+    return passwordChangedAt;
+  }
+
+  public void setPasswordChangedAt(Instant passwordChangedAt) {
+    this.passwordChangedAt = passwordChangedAt;
+  }
+
   public void setPasswordHash(String passwordHash) {
     this.passwordHash = passwordHash;
+
   }
 }

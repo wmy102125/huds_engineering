@@ -6,12 +6,20 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.slf4j.MDC;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * @author meiyan wang
+ * @date 2026-10-16 10:12 a.m.
+ * @description Runs before the spring security chain so that 401/403 responses can also have a correlation id.
+ */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @Component
 public class CorrelationIdFilter extends OncePerRequestFilter {
 

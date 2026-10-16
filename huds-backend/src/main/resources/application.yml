@@ -5,6 +5,11 @@ spring:
   profiles:
     default: local
 
+  session:
+    jdbc:
+      initialize-schema: never # table creation is handled by Flyway
+      timeout: 1800 # 30 minutes
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/huds}
     username: ${DB_USERNAME:huds}
@@ -26,6 +31,25 @@ spring:
 server:
   port: 8080
   shutdown: graceful
+  servlet:
+    session:
+      cookie:
+        name: HADS_SESSION #prod environment should change to __Host-HUDS_SESSION
+        http-only: true
+        secure: false #prod environment should change to true
+        same-site: strict
+        path: /
+huds:
+  auth:
+    max-failed-login-attempts: 5
+    lock-duration: 15m
+    destroy-idle-timeout: 30m
+    destroy-absolute-duration: 12h
+    mobile-idle-timeout: 24h
+    mobile-absolute-duration: 14h
+    ip-failure-limit: 30
+    ip-failure-window: 10m
+    cookie-secure: false #prod environment should change to true
 
 spring.lifecycle:
   timeout-per-shutdown-phase: 20s
