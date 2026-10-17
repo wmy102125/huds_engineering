@@ -10,13 +10,14 @@ import java.util.Map;
 public class RolePermissions {
     public static final String CASE_READ_OWN = "CASE_READ_OWN";
     public static final String CASE_READ_ALL = "CASE_READ_ALL";
-    public static final String CASE_REVIEW   = "CASE_REVIEW";
-    public static final String USER_MANAGE   = "USER_MANAGE";
-    public static final String AUDIT_READ    = "AUDIT_READ";
+    public static final String CASE_REVIEW = "CASE_REVIEW";
+    public static final String USER_MANAGE = "USER_MANAGE";
+    public static final String AUDIT_READ = "AUDIT_READ";
+    public static final String APPLIANCE_WRITE = "APPLIANCE_WRITE";
     private static final Map<String, List<String>> BY_ROLE = Map.of(
-            "ADMIN",List.of(CASE_READ_ALL,  USER_MANAGE, AUDIT_READ),
-            "TECHNICIAN",List.of(CASE_READ_OWN),
-            "REVIEWER",List.of(CASE_READ_ALL, CASE_REVIEW, AUDIT_READ)
+            "ADMIN", List.of(CASE_READ_ALL, USER_MANAGE, AUDIT_READ, APPLIANCE_WRITE),
+            "TECHNICIAN", List.of(CASE_READ_OWN, APPLIANCE_WRITE),
+            "REVIEWER", List.of(CASE_READ_ALL, CASE_REVIEW, AUDIT_READ)
     );
 
     public RolePermissions() {
