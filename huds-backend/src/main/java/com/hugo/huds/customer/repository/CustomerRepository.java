@@ -14,4 +14,10 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 
     List<Customer> findByEmailIgnoreCase(String email);
 
+    // True if another customer(any customerId except the given one) already uses this email, ignoring case
+    boolean existsByEmailIgnoreCaseAndCustomerIdNot(@Param("email") String email, @Param("customerId") UUID customerId);
+
+    // find if the email has already exists
+    boolean existsByEmailIgnoreCase(String email);
+
 }

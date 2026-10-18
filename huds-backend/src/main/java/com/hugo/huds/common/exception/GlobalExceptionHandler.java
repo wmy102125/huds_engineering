@@ -1,5 +1,6 @@
 package com.hugo.huds.common.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import com.hugo.huds.common.api.ApiErrorResponse;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.error.FieldViolation;
@@ -7,15 +8,11 @@ import com.hugo.huds.common.trace.CorrelationIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.ProblemDetail;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -24,10 +21,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.Comparator;
 import java.util.List;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusinessException(
@@ -42,6 +38,18 @@ public class GlobalExceptionHandler {
                 getCorrelationId(request), null
         );
         return ResponseEntity.status(ex.getErrorCode().getHttpStatus()).body(response);
+    }
+
+    // inside GlobalExceptionHandler
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrity(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request
+    ) {
+        // Raised by unique indexes when two requests race past the service-level duplicate check.
+        // Log the type only: the exception message contains the duplicated value (personal data).
+        log.warn("Data integrity violation on {} {}", request.getMethod(), request.getRequestURI());
+        return build(ErrorCode.DUPLICATE_RESOURCE, "The resource already exists.", request);
     }
 
     // Authentication failures raised inside a controller must never become a 500.

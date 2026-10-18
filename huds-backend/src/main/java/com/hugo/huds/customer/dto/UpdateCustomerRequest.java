@@ -4,12 +4,14 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.util.UUID;
+
 /**
  * @author meiyan wang
- * @date 2026-10-16 6:53 p.m.
- * @description CustomerRequest include customer's email and address information.
+ * @date 2026-10-18 1:55 p.m.
  */
-public record CreateCustomerRequest(@NotBlank(message = "Email is required")
+public record UpdateCustomerRequest(UUID customerId,
+                                    @NotBlank(message = "Email is required")
                                     @Email(message = "Email format is invalid")
                                     @Size(max = 254)
                                     String email,

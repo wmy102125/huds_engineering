@@ -48,3 +48,4 @@ logging:
     com.hugo.huds: INFO
     org.springframework.security: INFO
     com.hugo.huds.common.logging.MethodLoggingAspect: debug
+    org.hibernate.SQL: debug
