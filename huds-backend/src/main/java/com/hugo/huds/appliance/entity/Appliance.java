@@ -24,8 +24,8 @@ public class Appliance {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
-  @Column(name = "id", nullable = false, updatable = false)
-  private UUID id;
+  @Column(name = "appliance_id", nullable = false, updatable = false)
+  private UUID applianceId;
 
   @Column(name = "appliance_type", nullable = false)
   private String applianceType;
@@ -60,12 +60,12 @@ public class Appliance {
     // Required by JPA.
   }
 
-  public UUID getId() {
-    return id;
+  public UUID getApplianceId() {
+    return applianceId;
   }
 
-  public void setId(UUID id) {
-    this.id = id;
+  public void setApplianceId(UUID applianceId) {
+    this.applianceId = applianceId;
   }
 
   public String getApplianceType() {

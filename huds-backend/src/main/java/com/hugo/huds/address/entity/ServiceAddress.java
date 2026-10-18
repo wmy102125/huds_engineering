@@ -23,17 +23,17 @@ public class ServiceAddress {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
-  @Column(name = "id", nullable = false, updatable = false)
-  private UUID id;
+  @Column(name = "service_address_id", nullable = false, updatable = false)
+  private UUID serviceAddressId;
 
   @Column(name = "customer_id")
   private UUID customerId;
 
-  @Column(name = "line1", nullable = false)
-  private String line1;
+  @Column(name = "address_line1", nullable = false)
+  private String addressLine1;
 
-  @Column(name = "line2")
-  private String line2;
+  @Column(name = "address_line2")
+  private String addressLine2;
 
   @Column(name = "city", nullable = false)
   private String city;
@@ -44,8 +44,11 @@ public class ServiceAddress {
   @Column(name = "postal_code")
   private String postalCode;
 
-  @Column(name = "country", nullable = false)
-  private String country;
+  @Column(name = "country_code", nullable = false)
+  private String countryCode;
+
+  @Column(name = "is_default", nullable = false)
+  private Boolean isDefault = false;
 
   @Version
   @Column(name = "row_version", nullable = false)
@@ -58,12 +61,12 @@ public class ServiceAddress {
     // Required by JPA.
   }
 
-  public UUID getId() {
-    return id;
+  public UUID getServiceAddressId() {
+    return serviceAddressId;
   }
 
-  public void setId(UUID id) {
-    this.id = id;
+  public void setServiceAddressId(UUID serviceAddressId) {
+    this.serviceAddressId = serviceAddressId;
   }
 
   public UUID getCustomerId() {
@@ -74,20 +77,20 @@ public class ServiceAddress {
     this.customerId = customerId;
   }
 
-  public String getLine1() {
-    return line1;
+  public String getAddressLine1() {
+    return addressLine1;
   }
 
-  public void setLine1(String line1) {
-    this.line1 = line1;
+  public void setAddressLine1(String addressLine1) {
+    this.addressLine1 = addressLine1;
   }
 
-  public String getLine2() {
-    return line2;
+  public String getAddressLine2() {
+    return addressLine2;
   }
 
-  public void setLine2(String line2) {
-    this.line2 = line2;
+  public void setAddressLine2(String addressLine2) {
+    this.addressLine2 = addressLine2;
   }
 
   public String getCity() {
@@ -114,12 +117,20 @@ public class ServiceAddress {
     this.postalCode = postalCode;
   }
 
-  public String getCountry() {
-    return country;
+  public String getCountryCode() {
+    return countryCode;
   }
 
-  public void setCountry(String country) {
-    this.country = country;
+  public void setCountryCode(String countryCode) {
+    this.countryCode = countryCode;
+  }
+
+  public Boolean getIsDefault() {
+    return isDefault;
+  }
+
+  public void setIsDefault(Boolean isDefault) {
+    this.isDefault = isDefault;
   }
 
   public Long getRowVersion() {

@@ -22,14 +22,14 @@ public class ApplianceLocationHistory {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
-  @Column(name = "id", nullable = false, updatable = false)
-  private UUID id;
+  @Column(name = "location_history_id", nullable = false, updatable = false)
+  private UUID locationHistoryId;
 
   @Column(name = "appliance_id", nullable = false)
   private UUID applianceId;
 
-  @Column(name = "address_id")
-  private UUID addressId;
+  @Column(name = "service_address_id")
+  private UUID serviceAddressId;
 
   @Column(name = "customer_id")
   private UUID customerId;
@@ -47,12 +47,12 @@ public class ApplianceLocationHistory {
     // Required by JPA.
   }
 
-  public UUID getId() {
-    return id;
+  public UUID getLocationHistoryId() {
+    return locationHistoryId;
   }
 
-  public void setId(UUID id) {
-    this.id = id;
+  public void setLocationHistoryId(UUID locationHistoryId) {
+    this.locationHistoryId = locationHistoryId;
   }
 
   public UUID getApplianceId() {
@@ -63,12 +63,12 @@ public class ApplianceLocationHistory {
     this.applianceId = applianceId;
   }
 
-  public UUID getAddressId() {
-    return addressId;
+  public UUID getServiceAddressId() {
+    return serviceAddressId;
   }
 
-  public void setAddressId(UUID addressId) {
-    this.addressId = addressId;
+  public void setServiceAddressId(UUID serviceAddressId) {
+    this.serviceAddressId = serviceAddressId;
   }
 
   public UUID getCustomerId() {
