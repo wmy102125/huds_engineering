@@ -21,11 +21,11 @@ import java.security.Principal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+
 /**
  * @author meiyan wang
  * @date 2026-10-17 10:07 a.m
- * @description
- * Logs entry, exit, duration and failure of every controller and service method.
+ * @description Logs entry, exit, duration and failure of every controller and service method.
  *
  * <p>Entry and exit are logged at DEBUG. Arguments are serialized to JSON with sensitive
  * fields masked. Methods in the auth package never have their arguments logged.
@@ -46,7 +46,13 @@ public class MethodLoggingAspect {
     // Masks the string value of any JSON field whose name looks sensitive.
     private static final Pattern SENSITIVE_FIELD = Pattern.compile(
             "(\"(?:password|passwordHash|currentPassword|newPassword|token|secret"
-                    + "|phone|username|email|address\\w*|street\\w*|postalCode)\"\\s*:\\s*)\"(?:[^\"\\\\]|\\\\.)*\"",
+                    + "|phone|username|userName|email|address\\w*|street\\w*|postalCode)\"\\s*:\\s*)\"(?:[^\"\\\\]|\\\\.)*\"",
+            Pattern.CASE_INSENSITIVE);
+
+    // Parameter names whose values must never be logged, matched against the method's parameter name.
+    private static final Pattern SENSITIVE_PARAM_NAME = Pattern.compile(
+            "password|passwordHash|currentPassword|newPassword|token|secret"
+                    + "|phone|username|userName|email|address\\w*|street\\w*|postalCode",
             Pattern.CASE_INSENSITIVE);
 
     private final ObjectMapper objectMapper;
@@ -99,7 +105,8 @@ public class MethodLoggingAspect {
         List<String> parts = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             String name = names != null ? names[i] : "arg" + i;
-            parts.add(name + "=" + render(args[i]));
+            String value = SENSITIVE_PARAM_NAME.matcher(name).find() ? "\"***\"" : render(args[i]);
+            parts.add(name + "=" + value);
         }
         String text = "{" + String.join(", ", parts) + "}";
         return text.length() > MAX_ARGS_LENGTH ? text.substring(0, MAX_ARGS_LENGTH) + "...(truncated)" : text;
