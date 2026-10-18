@@ -18,7 +18,6 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 
 
-
 /**
  * @author meiyan wang
  * @date 2026-10-16 9:43 a.m.
@@ -42,7 +41,7 @@ public class RestAuthenticationHandlers implements AuthenticationEntryPoint, Acc
     //Login in but no permission -> 403 Forbidden. A CSRF failure is retryable: fetch a new token and resend.
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException ex) throws IOException, ServletException {
-        if(ex instanceof CsrfException) {
+        if (ex instanceof CsrfException) {
             write(request, response, ErrorCode.FORBIDDEN, "CSRF token is invalid or missing.", true);
         } else {
             write(request, response, ErrorCode.FORBIDDEN, "Access is denied.", false);
@@ -55,7 +54,7 @@ public class RestAuthenticationHandlers implements AuthenticationEntryPoint, Acc
 
         ApiErrorResponse body = new ApiErrorResponse(
                 errorCode.name(), message, retryable, null,
-                correlationId == null ? null : correlationId.toString());
+                correlationId == null ? null : correlationId.toString(), null);
 
         response.setStatus(errorCode.getHttpStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

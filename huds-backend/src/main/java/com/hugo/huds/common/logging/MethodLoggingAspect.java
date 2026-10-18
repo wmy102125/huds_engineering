@@ -46,7 +46,7 @@ public class MethodLoggingAspect {
     // Masks the string value of any JSON field whose name looks sensitive.
     private static final Pattern SENSITIVE_FIELD = Pattern.compile(
             "(\"(?:password|passwordHash|currentPassword|newPassword|token|secret"
-                    + "|phone|email|address\\w*|street\\w*|postalCode)\"\\s*:\\s*)\"(?:[^\"\\\\]|\\\\.)*\"",
+                    + "|phone|username|email|address\\w*|street\\w*|postalCode)\"\\s*:\\s*)\"(?:[^\"\\\\]|\\\\.)*\"",
             Pattern.CASE_INSENSITIVE);
 
     private final ObjectMapper objectMapper;

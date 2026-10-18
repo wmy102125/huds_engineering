@@ -14,8 +14,9 @@ public class RolePermissions {
     public static final String USER_MANAGE = "USER_MANAGE";
     public static final String AUDIT_READ = "AUDIT_READ";
     public static final String APPLIANCE_WRITE = "APPLIANCE_WRITE";
+    public static final String CUSTOMER_WRITE = "CUSTOMER_WRITE";
     private static final Map<String, List<String>> BY_ROLE = Map.of(
-            "ADMIN", List.of(CASE_READ_ALL, USER_MANAGE, AUDIT_READ, APPLIANCE_WRITE),
+            "ADMIN", List.of(CASE_READ_ALL, USER_MANAGE, AUDIT_READ, APPLIANCE_WRITE,CUSTOMER_WRITE),
             "TECHNICIAN", List.of(CASE_READ_OWN, APPLIANCE_WRITE),
             "REVIEWER", List.of(CASE_READ_ALL, CASE_REVIEW, AUDIT_READ)
     );

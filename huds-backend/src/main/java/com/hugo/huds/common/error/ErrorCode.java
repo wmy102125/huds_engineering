@@ -19,7 +19,11 @@ public enum ErrorCode {
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS),
     RETRY_LATER(HttpStatus.SERVICE_UNAVAILABLE),
 
+    DUPLICATE_RESOURCE(HttpStatus.CONFLICT),
+
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
+
+
 
     private final HttpStatus httpStatus;
 

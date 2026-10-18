@@ -1,5 +1,6 @@
 package com.hugo.huds.auth;
 
+import com.hugo.huds.support.AbstractIntegrationTest;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "huds.auth.max-failed-attempts=5"
 })
 @AutoConfigureMockMvc
-class AuthFlowIntegrationTest {
+class AuthFlowIntegrationTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "correct-horse-battery";
 
@@ -68,51 +69,6 @@ class AuthFlowIntegrationTest {
     private record Csrf(Cookie cookie, String header, String token) {
     }
 
-    private Csrf csrf() throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/auth/csrf")).andExpect(status().isOk()).andReturn();
-        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
-        Cookie cookie = result.getResponse().getCookie("XSRF-TOKEN");
-        assertNotNull(cookie, "XSRF-TOKEN cookie must be set");
-        return new Csrf(cookie, body.get("headerName").asText(), body.get("token").asText());
-    }
-
-    private UUID createUser(String role) {
-        UUID id = UUID.randomUUID();
-        jdbc.update("INSERT INTO users (user_id, user_name, email, password_hash, role, active) VALUES (?,?,?,?,?,true)",
-                id, "Test " + role, id + "@example.com", passwordEncoder.encode(PASSWORD), role);
-        return id;
-    }
-
-    private String emailOf(UUID userId) {
-        return userId + "@example.com";
-    }
-
-    private MvcResult login(String email, String password, UUID deviceId, String clientType) throws Exception {
-        Csrf csrf = csrf();
-        String body = objectMapper.writeValueAsString(Map.of(
-                "email", email, "password", password,
-                "deviceId", deviceId.toString(), "clientType", clientType));
-        return mockMvc.perform(post("/api/v1/auth/login")
-                        .cookie(csrf.cookie())
-                        .header(csrf.header(), csrf.token())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andReturn();
-    }
-
-    private Cookie loginOk(UUID userId, UUID deviceId, String clientType) throws Exception {
-        MvcResult result = login(emailOf(userId), PASSWORD, deviceId, clientType);
-        assertEquals(200, result.getResponse().getStatus());
-        // MockMvc has no servlet container, so the cookie keeps Spring Session's default name.
-        // Name and flags (HADS_SESSION, HttpOnly, SameSite) are verified against the real server by auth-smoke.sh.
-        Cookie session = Arrays.stream(result.getResponse().getCookies())
-                .filter(c -> !"XSRF-TOKEN".equals(c.getName()))
-                .findFirst()
-                .orElse(null);
-        assertNotNull(session, "login must set a session cookie; Set-Cookie headers were: "
-                + result.getResponse().getHeaders("Set-Cookie"));
-        return session;
-    }
 
     private long auditCount(String eventType, UUID userId) {
         Long n = jdbc.queryForObject(
@@ -218,7 +174,7 @@ class AuthFlowIntegrationTest {
         }
         assertNotNull(ref, "the lost device must appear in the session list");
 
-        Csrf csrf = csrf();
+        AbstractIntegrationTest.Csrf csrf = csrf();
         mockMvc.perform(delete("/api/v1/admin/users/" + technician + "/sessions/" + ref)
                         .cookie(adminSession, csrf.cookie())
                         .header(csrf.header(), csrf.token()))
@@ -244,7 +200,7 @@ class AuthFlowIntegrationTest {
         UUID user = createUser("TECHNICIAN");
         Cookie session = loginOk(user, UUID.randomUUID(), "DESKTOP");
 
-        Csrf csrf = csrf();
+        AbstractIntegrationTest.Csrf csrf = csrf();
         mockMvc.perform(post("/api/v1/auth/logout")
                         .cookie(session, csrf.cookie())
                         .header(csrf.header(), csrf.token()))
@@ -261,7 +217,7 @@ class AuthFlowIntegrationTest {
         Cookie old = loginOk(technician, UUID.randomUUID(), "DESKTOP");
         Cookie adminSession = loginOk(admin, UUID.randomUUID(), "DESKTOP");
 
-        Csrf csrf = csrf();
+        AbstractIntegrationTest.Csrf csrf = csrf();
         mockMvc.perform(post("/api/v1/admin/users/" + technician + "/password")
                         .cookie(adminSession, csrf.cookie())
                         .header(csrf.header(), csrf.token())
