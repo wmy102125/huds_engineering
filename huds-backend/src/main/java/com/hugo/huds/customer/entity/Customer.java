@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -20,98 +21,136 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "customers")
+@SQLRestriction("archived_at IS NULL")
 public class Customer {
 
-  @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  @Column(name = "customer_id", nullable = false, updatable = false)
-  private UUID customerId;
+    @Id
+    @Column(name = "customer_id", nullable = false, updatable = false)
+    private UUID customerId;
 
-  @Column(name = "customer_name", nullable = false)
-  private String customerName;
+    @Column(name = "customer_name", nullable = false)
+    private String customerName;
 
-  @Column(name = "phone")
-  private String phone;
+    @Column(name = "phone")
+    private String phone;
 
-  @Column(name = "email")
-  private String email;
+    @Column(name = "email")
+    private String email;
 
-  @Column(name = "notes")
-  private String notes;
+    @Column(name = "notes")
+    private String notes;
 
-  @Column(name = "archived_at")
-  private Instant archivedAt;
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 
-  @CreationTimestamp
-  @Column(name = "created_at", nullable = false, updatable = false)
-  private Instant createdAt;
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
-  @Version
-  @Column(name = "row_version", nullable = false)
-  private Long rowVersion;
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
-  public Customer() {
-    // Required by JPA.
-  }
+    @Column(name = "created_by", nullable = false)
+    private UUID createdBy;
 
-  public UUID getCustomerId() {
-    return customerId;
-  }
+    @Column(name = "updated_by", nullable = false)
+    private UUID updatedBy;
 
-  public void setCustomerId(UUID customerId) {
-    this.customerId = customerId;
-  }
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private Long rowVersion;
 
-  public String getCustomerName() {
-    return customerName;
-  }
+    public Customer() {
+        // Required by JPA.
+    }
 
-  public void setCustomerName(String customerName) {
-    this.customerName = customerName;
-  }
+    /**
+     * Soft-delete this customer. The update is issued by dirty checking when the transaction commits.
+     *
+     * @param now
+     */
+    public void archive(Instant now) {
+        this.archivedAt = now;
+    }
 
-  public String getPhone() {
-    return phone;
-  }
+    public UUID getCustomerId() {
+        return customerId;
+    }
 
-  public void setPhone(String phone) {
-    this.phone = phone;
-  }
+    public void setCustomerId(UUID customerId) {
+        this.customerId = customerId;
+    }
 
-  public String getEmail() {
-    return email;
-  }
+    public String getCustomerName() {
+        return customerName;
+    }
 
-  public void setEmail(String email) {
-    this.email = email;
-  }
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
+    }
 
-  public String getNotes() {
-    return notes;
-  }
+    public String getPhone() {
+        return phone;
+    }
 
-  public void setNotes(String notes) {
-    this.notes = notes;
-  }
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
 
-  public Instant getArchivedAt() {
-    return archivedAt;
-  }
+    public String getEmail() {
+        return email;
+    }
 
-  public void setArchivedAt(Instant archivedAt) {
-    this.archivedAt = archivedAt;
-  }
+    public void setEmail(String email) {
+        this.email = email;
+    }
 
-  public Instant getCreatedAt() {
-    return createdAt;
-  }
+    public String getNotes() {
+        return notes;
+    }
 
-  public void setCreatedAt(Instant createdAt) {
-    this.createdAt = createdAt;
-  }
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
 
-  public Long getRowVersion() {
-    return rowVersion;
-  }
+    public Instant getArchivedAt() {
+        return archivedAt;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(Instant createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public UUID getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(UUID createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public UUID getUpdatedBy() {
+        return updatedBy;
+    }
+
+    public void setUpdatedBy(UUID updatedBy) {
+        this.updatedBy = updatedBy;
+    }
+
+    public Long getRowVersion() {
+        return rowVersion;
+    }
 
 }

@@ -23,18 +23,8 @@ import java.util.UUID;
 public class Appliance {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
   @Column(name = "appliance_id", nullable = false, updatable = false)
   private UUID applianceId;
-
-  @Column(name = "appliance_type", nullable = false)
-  private String applianceType;
-
-  @Column(name = "brand")
-  private String brand;
-
-  @Column(name = "model_no")
-  private String modelNo;
 
   @Column(name = "serial_no")
   private String serialNo;
@@ -60,6 +50,15 @@ public class Appliance {
     // Required by JPA.
   }
 
+  /**
+   * Soft-deletes this address. The UPDATE is issued by dirty checking when the transaction commits.
+   *
+   * @param now the archive time
+   */
+  public void archive(Instant now) {
+    this.archivedAt = now;
+  }
+
   public UUID getApplianceId() {
     return applianceId;
   }
@@ -68,29 +67,6 @@ public class Appliance {
     this.applianceId = applianceId;
   }
 
-  public String getApplianceType() {
-    return applianceType;
-  }
-
-  public void setApplianceType(String applianceType) {
-    this.applianceType = applianceType;
-  }
-
-  public String getBrand() {
-    return brand;
-  }
-
-  public void setBrand(String brand) {
-    this.brand = brand;
-  }
-
-  public String getModelNo() {
-    return modelNo;
-  }
-
-  public void setModelNo(String modelNo) {
-    this.modelNo = modelNo;
-  }
 
   public String getSerialNo() {
     return serialNo;
