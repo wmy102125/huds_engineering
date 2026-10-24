@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-18 12:20 p.m.
  * @description
  * Base class for integration tests that need a real PostgreSQL(TestContainer),CSRF handling and a logged-in user.

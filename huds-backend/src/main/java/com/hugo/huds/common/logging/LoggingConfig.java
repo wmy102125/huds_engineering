@@ -4,7 +4,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-17 2:28 p.m.
  */
 @Configuration

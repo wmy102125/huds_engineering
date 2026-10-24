@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-14 10:14 p.m.
  */
 @RestController

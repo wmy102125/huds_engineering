@@ -6,6 +6,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -20,6 +22,8 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "sync_mutations")
+@Setter
+@Getter
 public class SyncMutation {
 
   @Id
@@ -62,92 +66,6 @@ public class SyncMutation {
     // Required by JPA.
   }
 
-  public UUID getSyncMutationId() {
-    return syncMutationId;
-  }
 
-  public void setSyncMutationId(UUID syncMutationId) {
-    this.syncMutationId = syncMutationId;
-  }
-
-  public UUID getActorUserId() {
-    return actorUserId;
-  }
-
-  public void setActorUserId(UUID actorUserId) {
-    this.actorUserId = actorUserId;
-  }
-
-  public UUID getClientMutationId() {
-    return clientMutationId;
-  }
-
-  public void setClientMutationId(UUID clientMutationId) {
-    this.clientMutationId = clientMutationId;
-  }
-
-  public String getDeviceId() {
-    return deviceId;
-  }
-
-  public void setDeviceId(String deviceId) {
-    this.deviceId = deviceId;
-  }
-
-  public String getEntityType() {
-    return entityType;
-  }
-
-  public void setEntityType(String entityType) {
-    this.entityType = entityType;
-  }
-
-  public UUID getEntityId() {
-    return entityId;
-  }
-
-  public void setEntityId(UUID entityId) {
-    this.entityId = entityId;
-  }
-
-  public String getOperation() {
-    return operation;
-  }
-
-  public void setOperation(String operation) {
-    this.operation = operation;
-  }
-
-  public String getStatus() {
-    return status;
-  }
-
-  public void setStatus(String status) {
-    this.status = status;
-  }
-
-  public String getResponsePayload() {
-    return responsePayload;
-  }
-
-  public void setResponsePayload(String responsePayload) {
-    this.responsePayload = responsePayload;
-  }
-
-  public Instant getClientRecordedAt() {
-    return clientRecordedAt;
-  }
-
-  public void setClientRecordedAt(Instant clientRecordedAt) {
-    this.clientRecordedAt = clientRecordedAt;
-  }
-
-  public Instant getProcessedAt() {
-    return processedAt;
-  }
-
-  public void setProcessedAt(Instant processedAt) {
-    this.processedAt = processedAt;
-  }
 
 }

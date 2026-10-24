@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 1:34 p.m.
  * @description
  * New password chosen by an administrator. Minimum length 12, no complexity rules (ADR-013).

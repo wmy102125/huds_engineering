@@ -1,6 +1,6 @@
 package com.hugo.huds.auth.service;
 
-import com.hugo.huds.audit.AuditService;
+import com.hugo.huds.audit.service.AuditService;
 import com.hugo.huds.auth.dto.ClientType;
 import com.hugo.huds.auth.dto.LoginRequest;
 import com.hugo.huds.auth.dto.LoginResponse;
@@ -9,7 +9,7 @@ import com.hugo.huds.auth.support.AuthSessionAttributes;
 import com.hugo.huds.auth.support.ClientIp;
 import com.hugo.huds.auth.support.RolePermissions;
 import com.hugo.huds.common.error.ErrorCode;
-import com.hugo.huds.common.exception.BusinessException;
+import com.hugo.huds.common.exception.ApplicationException;
 import com.hugo.huds.common.trace.CorrelationIdFilter;
 import com.hugo.huds.config.AuthProperties;
 import com.hugo.huds.user.entity.Users;
@@ -34,7 +34,7 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-14 10:43 p.m.
  * @description Session-based login and logout (ADR-013).
  *
@@ -82,7 +82,7 @@ public class AuthService {
             Map<String, Object> blocked = new HashMap<>(metadata);
             blocked.put("reason", "IP_RATE_LIMIT");
             auditService.record(AuditService.AUTH_LOGIN_BLOCKED, "USER", null, null, correlationId, blocked);
-            throw new BusinessException(ErrorCode.RATE_LIMITED,
+            throw new ApplicationException(ErrorCode.RATE_LIMITED,
                     "Too many login attempts. Try again later.", true, null);
 
         }
@@ -95,7 +95,7 @@ public class AuthService {
             UUID lockedUserId = existing.get().getUserId();
             auditService.record(AuditService.AUTH_LOGIN_BLOCKED, "USER",
                     lockedUserId, lockedUserId, correlationId, blocked);
-            throw new BusinessException(ErrorCode.RATE_LIMITED,
+            throw new ApplicationException(ErrorCode.RATE_LIMITED,
                     "Too many failed attempts. Try again later.", true, null);
         }
 
@@ -106,7 +106,7 @@ public class AuthService {
                     new UsernamePasswordAuthenticationToken(email, loginRequest.password()));
         } catch (AuthenticationException ex) {
             handleFailure(existing, ex, metadata, correlationId);
-            throw new BusinessException(ErrorCode.UNAUTHENTICATED, GENERIC_FAILURE);
+            throw new ApplicationException(ErrorCode.UNAUTHENTICATED, GENERIC_FAILURE);
         }
         Users user = usersRepository.findByEmailIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new IllegalStateException("Authenticated user could not be found"));
@@ -173,7 +173,7 @@ public class AuthService {
         // Re-check that the account still exists and is active on every /me call.
         Users user = usersRepository.findByEmailIgnoreCase(authentication.getName())
                 .filter(u -> Boolean.TRUE.equals(u.getActive()))
-                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED, "Authentication is required."));
+                .orElseThrow(() -> new ApplicationException(ErrorCode.UNAUTHENTICATED, "Authentication is required."));
 
         UUID deviceId = null;
         Object device = session.getAttribute(AuthSessionAttributes.DEVICE_ID);

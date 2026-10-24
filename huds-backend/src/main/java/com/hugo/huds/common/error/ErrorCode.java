@@ -1,7 +1,9 @@
 package com.hugo.huds.common.error;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+@Getter
 public enum ErrorCode {
 
     INVALID_PAYLOAD(HttpStatus.BAD_REQUEST),
@@ -21,9 +23,12 @@ public enum ErrorCode {
 
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT),
 
-    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR);
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR),
 
-
+    // For the sync api error
+    MUTATION_ID_REUSED(HttpStatus.CONFLICT),
+    OUTBOX_OWNER_MISMATCH(HttpStatus.FORBIDDEN),
+    CURSOR_EXPIRED(HttpStatus.GONE),;
 
     private final HttpStatus httpStatus;
 
@@ -31,7 +36,4 @@ public enum ErrorCode {
         this.httpStatus = httpStatus;
     }
 
-    public HttpStatus getHttpStatus() {
-        return httpStatus;
-    }
 }

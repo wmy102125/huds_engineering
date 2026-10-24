@@ -1,13 +1,12 @@
 package com.hugo.huds.common.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import com.hugo.huds.common.api.ApiErrorResponse;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.error.FieldViolation;
 import com.hugo.huds.common.trace.CorrelationIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -25,9 +24,27 @@ import java.util.List;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiErrorResponse> handleBusinessException(
-            BusinessException ex,
+    // A violation raised on a service method parameter means the caller passed invalid input.
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleConstraintViolation(
+            ConstraintViolationException ex,
+            HttpServletRequest request
+    ) {
+        ApiErrorResponse response = new ApiErrorResponse(
+                ErrorCode.INVALID_PAYLOAD.name(),
+                "Request validation failed.",
+                false,
+                null,
+                getCorrelationId(request),
+                null,
+                null
+        );
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(ApplicationException.class)
+    public ResponseEntity<ApiErrorResponse> handleApplicationException(
+            ApplicationException ex,
             HttpServletRequest request
     ) {
         ApiErrorResponse response = new ApiErrorResponse(
@@ -35,7 +52,7 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 ex.isRetryable(),
                 ex.getCurrentVersion(),
-                getCorrelationId(request), null
+                getCorrelationId(request), null,null
         );
         return ResponseEntity.status(ex.getErrorCode().getHttpStatus()).body(response);
     }
@@ -109,6 +126,7 @@ public class GlobalExceptionHandler {
                 false,
                 null,
                 getCorrelationId(request),
+                null,
                 violations
         );
 
@@ -117,7 +135,7 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ApiErrorResponse> build(ErrorCode code, String message, HttpServletRequest request) {
         ApiErrorResponse response = new ApiErrorResponse(
-                code.name(), message, false, null, getCorrelationId(request), null);
+                code.name(), message, false, null, getCorrelationId(request), null,null);
         return ResponseEntity.status(code.getHttpStatus()).body(response);
     }
 

@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.util.UUID;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-14 10:00 p.m.
  * @description
  * Request body for login. The password is never logged or audited.

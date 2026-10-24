@@ -1,30 +1,38 @@
 package com.hugo.huds.appliance.entity;
 
+import com.hugo.huds.auth.persistence.AuthoredAuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import org.hibernate.annotations.CreationTimestamp;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
+import org.hibernate.annotations.SQLRestriction;
 
 /**
  * JPA entity mapped to the existing {@code appliances} table.
  *
  * <p>The database schema is managed by Flyway. Hibernate must not be used
- * to create or update this table.</p>
+ * to create or update this table. The audit columns are inherited from
+ * {@link AuthoredAuditableEntity} and filled automatically.</p>
  */
 @Entity
 @Table(name = "appliances")
-public class Appliance {
+@SQLRestriction("archived_at IS NULL")
+@Getter
+@Setter
+public class Appliance extends AuthoredAuditableEntity {
 
   @Id
   @Column(name = "appliance_id", nullable = false, updatable = false)
   private UUID applianceId;
+
+  @Column(name = "appliance_model_id", nullable = false)
+  private UUID applianceModelId;
 
   @Column(name = "serial_no")
   private String serialNo;
@@ -35,15 +43,13 @@ public class Appliance {
   @Column(name = "identity_notes")
   private String identityNotes;
 
-  @CreationTimestamp
-  @Column(name = "created_at", nullable = false, updatable = false)
-  private Instant createdAt;
-
   @Column(name = "archived_at")
+  @Setter(AccessLevel.NONE)
   private Instant archivedAt;
 
   @Version
   @Column(name = "row_version", nullable = false)
+  @Setter(AccessLevel.NONE)
   private Long rowVersion;
 
   public Appliance() {
@@ -51,65 +57,11 @@ public class Appliance {
   }
 
   /**
-   * Soft-deletes this address. The UPDATE is issued by dirty checking when the transaction commits.
+   * Soft-deletes this appliance. The UPDATE is issued by dirty checking when the transaction commits.
    *
    * @param now the archive time
    */
   public void archive(Instant now) {
     this.archivedAt = now;
   }
-
-  public UUID getApplianceId() {
-    return applianceId;
-  }
-
-  public void setApplianceId(UUID applianceId) {
-    this.applianceId = applianceId;
-  }
-
-
-  public String getSerialNo() {
-    return serialNo;
-  }
-
-  public void setSerialNo(String serialNo) {
-    this.serialNo = serialNo;
-  }
-
-  public Boolean getSerialVerified() {
-    return serialVerified;
-  }
-
-  public void setSerialVerified(Boolean serialVerified) {
-    this.serialVerified = serialVerified;
-  }
-
-  public String getIdentityNotes() {
-    return identityNotes;
-  }
-
-  public void setIdentityNotes(String identityNotes) {
-    this.identityNotes = identityNotes;
-  }
-
-  public Instant getCreatedAt() {
-    return createdAt;
-  }
-
-  public void setCreatedAt(Instant createdAt) {
-    this.createdAt = createdAt;
-  }
-
-  public Instant getArchivedAt() {
-    return archivedAt;
-  }
-
-  public void setArchivedAt(Instant archivedAt) {
-    this.archivedAt = archivedAt;
-  }
-
-  public Long getRowVersion() {
-    return rowVersion;
-  }
-
 }

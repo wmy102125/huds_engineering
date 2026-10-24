@@ -1,7 +1,39 @@
--- HADS Phase 1 baseline DDL | PostgreSQL 17+ | 2026-10-07
+-- HADS Phase 1 baseline DDL | PostgreSQL 17+ | consolidated 2026-10-19
 -- Review before production. Application must enforce state machines, authorization and evidence immutability.
+--
+-- This file replaces the former V001 + V002 (auth session / lockout) + V003 (customer integrity)
+-- and adds, before the first real deployment:
+--   * created_at / updated_at on every table that is modified after insertion (users + all tables
+--     with row_version). updated_at is maintained by the application (JPA auditing).
+--     Append-only tables (events, evidence, measurements, audit log, sync_mutations) intentionally
+--     have no updated_at.
+--   * sync_mutations.client_recorded_at (when the action was performed on the offline device).
+-- From the first deployment on, this file must never be edited: add new migrations instead.
 
 --BEGIN;
+-- Spring Session JDBC tables (session store, see ADR-013).
+CREATE TABLE spring_session (
+                                primary_id            char(36)     NOT NULL,
+                                session_id            char(36)     NOT NULL,
+                                creation_time         bigint       NOT NULL,
+                                last_access_time      bigint       NOT NULL,
+                                max_inactive_interval integer      NOT NULL,
+                                expiry_time           bigint       NOT NULL,
+                                principal_name        varchar(254),
+                                CONSTRAINT spring_session_pk PRIMARY KEY (primary_id)
+);
+CREATE UNIQUE INDEX spring_session_ix1 ON spring_session (session_id);
+CREATE INDEX spring_session_ix2 ON spring_session (expiry_time);
+CREATE INDEX spring_session_ix3 ON spring_session (principal_name);
+
+CREATE TABLE spring_session_attributes (
+                                           session_primary_id char(36)     NOT NULL,
+                                           attribute_name     varchar(200) NOT NULL,
+                                           attribute_bytes    bytea        NOT NULL,
+                                           CONSTRAINT spring_session_attributes_pk PRIMARY KEY (session_primary_id, attribute_name),
+                                           CONSTRAINT spring_session_attributes_fk FOREIGN KEY (session_primary_id)
+                                               REFERENCES spring_session (primary_id) ON DELETE CASCADE
+);
 
 CREATE TABLE users (
                        user_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -10,7 +42,12 @@ CREATE TABLE users (
                        password_hash text NOT NULL,
                        role text NOT NULL CHECK (role IN ('TECHNICIAN', 'REVIEWER', 'ADMIN')),
                        active boolean NOT NULL DEFAULT true,
-                       created_at timestamptz NOT NULL DEFAULT now()
+                       failed_login_attempts integer NOT NULL DEFAULT 0,
+                       locked_until timestamptz,
+                       password_changed_at timestamptz,
+                       created_at timestamptz NOT NULL DEFAULT now(),
+                       updated_at timestamptz NOT NULL DEFAULT now(),
+                       CONSTRAINT ck_users_failed_login_attempts CHECK (failed_login_attempts >= 0)
 );
 
 CREATE TABLE customers (
@@ -21,12 +58,21 @@ CREATE TABLE customers (
                            notes text,
                            archived_at timestamptz,
                            created_at timestamptz NOT NULL DEFAULT now(),
+                           updated_at timestamptz NOT NULL DEFAULT now(),
+                           created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                           updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
                            row_version bigint NOT NULL DEFAULT 0
 );
 
+-- One ACTIVE customer per email, ignoring case. Archived (soft-deleted) customers do not occupy
+-- their email, so it can be reused. Customers without an email are not constrained.
+CREATE UNIQUE INDEX ux_customers_email_lower
+    ON customers (lower(email))
+    WHERE email IS NOT NULL AND email <> '' AND archived_at IS NULL;
+
 CREATE TABLE service_addresses (
                                    service_address_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                                   customer_id uuid REFERENCES customers(customer_id) ON DELETE RESTRICT,
+                                   customer_id uuid NOT NULL REFERENCES customers(customer_id) ON DELETE RESTRICT,
                                    address_line1 text NOT NULL,
                                    address_line2 text,
                                    city text NOT NULL,
@@ -34,44 +80,70 @@ CREATE TABLE service_addresses (
                                    postal_code text,
                                    country_code text NOT NULL DEFAULT 'CA',
                                    is_default boolean NOT NULL DEFAULT false,
+                                   created_at timestamptz NOT NULL DEFAULT now(),
+                                   updated_at timestamptz NOT NULL DEFAULT now(),
+                                   created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                   updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
                                    row_version bigint NOT NULL DEFAULT 0,
                                    archived_at timestamptz
 );
 CREATE INDEX idx_service_addresses_customer_id ON service_addresses(customer_id);
+-- At most one active default address per customer.
+CREATE UNIQUE INDEX ux_service_addresses_one_default
+    ON service_addresses (customer_id)
+    WHERE is_default = true AND archived_at IS NULL;
+
+CREATE TABLE appliance_models (
+                                  appliance_model_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                  appliance_type text NOT NULL,
+                                  brand text,
+                                  model_no text,
+                                  created_at timestamptz NOT NULL DEFAULT now(),
+                                  updated_at timestamptz NOT NULL DEFAULT now(),
+                                  created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                  updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                  archived_at timestamptz,
+                                  row_version bigint NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX ux_appliance_models_identity
+    ON appliance_models (lower(appliance_type), coalesce(lower(brand), ''), coalesce(lower(model_no), ''))
+    WHERE archived_at IS NULL;
 
 CREATE TABLE appliances (
                             appliance_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                            appliance_type text NOT NULL,
-                            brand text,
-                            model_no text,
+                            appliance_model_id uuid NOT NULL REFERENCES appliance_models(appliance_model_id) ON DELETE RESTRICT,
                             serial_no text,
                             serial_verified boolean NOT NULL DEFAULT false,
                             identity_notes text,
                             created_at timestamptz NOT NULL DEFAULT now(),
+                            updated_at timestamptz NOT NULL DEFAULT now(),
+                            created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                            updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
                             archived_at timestamptz,
                             row_version bigint NOT NULL DEFAULT 0
 );
-CREATE INDEX idx_appliance_identity ON appliances(brand, model_no, serial_no);
+CREATE INDEX idx_appliance_identity ON appliances(appliance_model_id, serial_no);
 
-CREATE TABLE appliance_location_history (
-                                            location_history_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                                            appliance_id uuid NOT NULL REFERENCES appliances(appliance_id) ON DELETE RESTRICT,
-                                            service_address_id uuid REFERENCES service_addresses(service_address_id) ON DELETE RESTRICT,
-                                            customer_id uuid REFERENCES customers(customer_id) ON DELETE RESTRICT,
-                                            valid_from timestamptz NOT NULL,
-                                            valid_to timestamptz,
-                                            note text,
-                                            CONSTRAINT ck_appliance_location_history_valid_period CHECK (valid_to IS NULL OR valid_to > valid_from)
+CREATE TABLE appliance_service_addresses (
+                                             appliance_service_address_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                             appliance_id uuid NOT NULL REFERENCES appliances(appliance_id) ON DELETE RESTRICT,
+                                             service_address_id uuid NOT NULL REFERENCES service_addresses(service_address_id) ON DELETE RESTRICT,
+                                             note text,
+                                             created_at timestamptz NOT NULL DEFAULT now(),
+                                             updated_at timestamptz NOT NULL DEFAULT now(),
+                                             created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                             updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                             archived_at timestamptz,
+                                             row_version bigint NOT NULL DEFAULT 0
 );
-CREATE INDEX idx_appliance_location ON appliance_location_history(appliance_id, valid_from DESC);
-CREATE EXTENSION IF NOT EXISTS btree_gist;
-ALTER TABLE appliance_location_history ADD CONSTRAINT ex_appliance_location_no_overlap EXCLUDE USING gist (appliance_id WITH =, tstzrange(valid_from, valid_to, '[)') WITH &&);
+-- One active link per (appliance, address): repeat repairs at the same address reuse the existing row.
+CREATE UNIQUE INDEX ux_appliance_service_addresses_pair
+    ON appliance_service_addresses (appliance_id, service_address_id) WHERE archived_at IS NULL;
+CREATE INDEX idx_appliance_service_addresses_address ON appliance_service_addresses (service_address_id);
 
 CREATE TABLE diagnostic_cases (
                                   diagnostic_case_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                                  appliance_id uuid NOT NULL REFERENCES appliances(appliance_id) ON DELETE RESTRICT,
-                                  customer_id uuid REFERENCES customers(customer_id) ON DELETE RESTRICT,
-                                  service_address_id uuid REFERENCES service_addresses(service_address_id) ON DELETE RESTRICT,
+                                  appliance_service_address_id uuid NOT NULL REFERENCES appliance_service_addresses(appliance_service_address_id) ON DELETE RESTRICT,
                                   service_address_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
                                   reported_symptoms text NOT NULL,
                                   error_codes text,
@@ -82,11 +154,13 @@ CREATE TABLE diagnostic_cases (
                                   opened_at timestamptz NOT NULL DEFAULT now(),
                                   closed_at timestamptz,
                                   created_by uuid REFERENCES users(user_id) ON DELETE RESTRICT,
+                                  created_at timestamptz NOT NULL DEFAULT now(),
+                                  updated_at timestamptz NOT NULL DEFAULT now(),
                                   row_version bigint NOT NULL DEFAULT 0,
                                   CONSTRAINT ck_diagnostic_cases_closed_at CHECK (workflow_status <> 'CLOSED' OR closed_at IS NOT NULL),
                                   CONSTRAINT ck_diagnostic_cases_disposition CHECK (workflow_status <> 'CLOSED' OR disposition IS NOT NULL)
 );
-CREATE INDEX idx_case_appliance ON diagnostic_cases(appliance_id, opened_at DESC);
+CREATE INDEX idx_case_appliance_service_address ON diagnostic_cases(appliance_service_address_id, opened_at DESC);
 CREATE INDEX idx_case_status ON diagnostic_cases(workflow_status, opened_at DESC);
 
 CREATE TABLE case_state_events (
@@ -109,6 +183,8 @@ CREATE TABLE service_visits (
                                 ended_at timestamptz,
                                 pause_reason text,
                                 notes text,
+                                created_at timestamptz NOT NULL DEFAULT now(),
+                                updated_at timestamptz NOT NULL DEFAULT now(),
                                 row_version bigint NOT NULL DEFAULT 0,
                                 CONSTRAINT ck_service_visits_time_order CHECK (ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at),
                                 CONSTRAINT ck_service_visits_completed_times CHECK (visit_status <> 'COMPLETED' OR (started_at IS NOT NULL AND ended_at IS NOT NULL))
@@ -232,6 +308,8 @@ CREATE TABLE root_cause_findings (
                                      supporting_evidence jsonb NOT NULL DEFAULT '[]'::jsonb,
                                      contradicting_evidence jsonb NOT NULL DEFAULT '[]'::jsonb,
                                      recorded_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                     created_at timestamptz NOT NULL DEFAULT now(),
+                                     updated_at timestamptz NOT NULL DEFAULT now(),
                                      row_version bigint NOT NULL DEFAULT 0,
                                      recorded_at timestamptz NOT NULL DEFAULT now(),
                                      CONSTRAINT ck_root_cause_findings_conclusion CHECK (length(trim(conclusion)) > 0)
@@ -250,6 +328,7 @@ CREATE TABLE estimate_revisions (
     row_version bigint NOT NULL DEFAULT 0,
     issued_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT uq_estimate_revisions_case_revision UNIQUE (diagnostic_case_id, revision_no),
     CONSTRAINT ck_estimate_revisions_issued_at CHECK (status NOT IN ('ISSUED', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'SUPERSEDED') OR issued_at IS NOT NULL)
 );
@@ -265,6 +344,7 @@ CREATE TABLE estimate_items (
                                 line_total numeric(12, 2) NOT NULL,
                                 row_version bigint NOT NULL DEFAULT 0,
                                 created_at timestamptz NOT NULL DEFAULT now(),
+                                updated_at timestamptz NOT NULL DEFAULT now(),
                                 CONSTRAINT ck_estimate_items_description CHECK (length(trim(description)) > 0)
 );
 CREATE INDEX idx_estimate_items_revision ON estimate_items(estimate_revision_id);
@@ -303,6 +383,8 @@ CREATE TABLE repair_actions (
                                 performed_by uuid REFERENCES users(user_id) ON DELETE RESTRICT,
                                 started_at timestamptz,
                                 completed_at timestamptz,
+                                created_at timestamptz NOT NULL DEFAULT now(),
+                                updated_at timestamptz NOT NULL DEFAULT now(),
                                 row_version bigint NOT NULL DEFAULT 0,
                                 CONSTRAINT ck_repair_actions_description CHECK (length(trim(description)) > 0),
                                 CONSTRAINT ck_repair_actions_time_order CHECK (completed_at IS NULL OR started_at IS NULL OR completed_at >= started_at),
@@ -322,6 +404,8 @@ CREATE TABLE installed_parts (
                                  condition text CHECK (condition IN ('NEW', 'REFURBISHED', 'USED', 'UNKNOWN')),
                                  installation_result text CHECK (installation_result IN ('INSTALLED', 'DOA', 'DAMAGED', 'REMOVED', 'RETURNED')),
                                  notes text,
+                                 created_at timestamptz NOT NULL DEFAULT now(),
+                                 updated_at timestamptz NOT NULL DEFAULT now(),
                                  row_version bigint NOT NULL DEFAULT 0,
                                  CONSTRAINT ck_installed_parts_name CHECK (length(trim(part_name)) > 0)
 );
@@ -443,6 +527,9 @@ CREATE TABLE sync_mutations (
                                 operation text NOT NULL,
                                 status text NOT NULL CHECK (status IN ('ACCEPTED', 'REJECTED')),
                                 response_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+    -- When the technician actually performed the action on the (offline) device.
+    -- Untrusted device clock: informational / business display only, never used for ordering.
+                                client_recorded_at timestamptz NOT NULL,
                                 processed_at timestamptz NOT NULL DEFAULT now(),
                                 CONSTRAINT uq_sync_mutations_actor_client_mutation UNIQUE (actor_user_id, client_mutation_id),
                                 CONSTRAINT ck_sync_mutations_device_id CHECK (length(trim(device_id)) > 0),
@@ -469,5 +556,8 @@ CREATE TABLE audit_events (
 CREATE INDEX idx_audit_events_entity ON audit_events(entity_type, entity_id, occurred_at DESC);
 CREATE INDEX idx_audit_events_occurred_at ON audit_events(occurred_at DESC);
 CREATE INDEX idx_audit_events_correlation_id ON audit_events(correlation_id);
+-- Used to count failed logins per IP (login rate limit).
+CREATE INDEX idx_audit_events_login_failed_ip  ON audit_events ((metadata ->> 'ip'), occurred_at DESC) WHERE event_type = 'AUTH_LOGIN_FAILED';
+
 
 --COMMIT;

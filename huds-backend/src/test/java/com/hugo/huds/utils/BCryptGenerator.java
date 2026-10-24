@@ -3,7 +3,7 @@ package com.hugo.huds.utils;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-14 11:21 p.m.
  */
 public class BCryptGenerator {

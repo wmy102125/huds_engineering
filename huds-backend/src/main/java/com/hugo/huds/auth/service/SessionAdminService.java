@@ -1,11 +1,11 @@
 package com.hugo.huds.auth.service;
 
 import org.springframework.stereotype.Service;
-import com.hugo.huds.audit.AuditService;
+import com.hugo.huds.audit.service.AuditService;
 import com.hugo.huds.auth.dto.SessionInfoResponse;
 import com.hugo.huds.auth.support.AuthSessionAttributes;
 import com.hugo.huds.common.error.ErrorCode;
-import com.hugo.huds.common.exception.BusinessException;
+import com.hugo.huds.common.exception.ApplicationException;
 import com.hugo.huds.user.entity.Users;
 import com.hugo.huds.user.repository.UsersRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 1:35 p.m.
  * @description
  * Administrator operations on user sessions and passwords: list active sessions, revoke one
@@ -67,7 +67,7 @@ public class SessionAdminService {
                 return;
             }
         }
-        throw new BusinessException(ErrorCode.NOT_FOUND, "Session not found.");
+        throw new ApplicationException(ErrorCode.NOT_FOUND, "Session not found.");
     }
 
     @Transactional
@@ -96,7 +96,7 @@ public class SessionAdminService {
 
     private Users requireUser(UUID userId) {
         return usersRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "User not found."));
+                .orElseThrow(() -> new ApplicationException(ErrorCode.NOT_FOUND, "User not found."));
     }
 
     private SessionInfoResponse toInfo(Session session) {

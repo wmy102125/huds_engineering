@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.util.UUID;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-18 1:55 p.m.
  */
 public record UpdateCustomerRequest(UUID customerId,
@@ -15,19 +15,19 @@ public record UpdateCustomerRequest(UUID customerId,
                                     @Email(message = "Email format is invalid")
                                     @Size(max = 254)
                                     String email,
-                                    @NotBlank(message = "customer name is required")
+                                    @NotBlank(message = "Customer name is required")
                                     String customerName,
                                     String phone,
                                     String notes,
-                                    @NotBlank(message = "address line1 is required")
+                                    @NotBlank(message = "Address line1 is required")
                                     String addressLine1,
                                     String addressLine2,
-                                    @NotBlank(message = "city is required")
+                                    @NotBlank(message = "City is required")
                                     String city,
-                                    @NotBlank(message = "province is required")
+                                    @NotBlank(message = "Province is required")
                                     String province,
-                                    @NotBlank(message = "postalCode is required")
+                                    @NotBlank(message = "PostalCode is required")
                                     String postalCode,
-                                    @NotBlank(message = "country code is required")
+                                    @NotBlank(message = "Country code is required")
                                     String countryCode) {
 }

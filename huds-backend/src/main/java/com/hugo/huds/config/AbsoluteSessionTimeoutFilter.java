@@ -12,7 +12,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 10:12 a.m.
  * @description To reduce the risk of losing device state, enforces the absolute session lifetime.
  * spring Session only supports idle session timeout, which means that if the user is active, the session will not expire.

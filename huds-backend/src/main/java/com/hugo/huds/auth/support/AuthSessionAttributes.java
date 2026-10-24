@@ -1,7 +1,7 @@
 package com.hugo.huds.auth.support;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 9:33 a.m.
  */
 public class AuthSessionAttributes {

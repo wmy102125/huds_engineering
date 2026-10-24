@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-14 10:08 p.m.
  * @description
  * Returned after a successful login. Permissions let the client show or hide features;

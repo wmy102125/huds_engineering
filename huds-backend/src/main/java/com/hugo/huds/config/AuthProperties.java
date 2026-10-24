@@ -7,7 +7,7 @@ import java.time.Duration;
 
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 9:39 a.m.
  */
 @ConfigurationProperties(prefix = "huds.auth")

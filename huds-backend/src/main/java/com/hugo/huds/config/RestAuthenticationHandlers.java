@@ -19,7 +19,7 @@ import java.io.IOException;
 
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 9:43 a.m.
  * @description Writes 401/403 responses produced inside the spring security filter chain using the project's unified error body.
  */
@@ -54,7 +54,7 @@ public class RestAuthenticationHandlers implements AuthenticationEntryPoint, Acc
 
         ApiErrorResponse body = new ApiErrorResponse(
                 errorCode.name(), message, retryable, null,
-                correlationId == null ? null : correlationId.toString(), null);
+                correlationId == null ? null : correlationId.toString(), null,null);
 
         response.setStatus(errorCode.getHttpStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

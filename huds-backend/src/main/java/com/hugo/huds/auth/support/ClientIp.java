@@ -6,7 +6,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.regex.Pattern;
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 11:02 a.m.
  * @description
  * Resolves the client IP used for rate limiting and audit.

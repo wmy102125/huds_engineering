@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.hugo.huds.common.error.FieldViolation;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * @param code
@@ -25,6 +26,7 @@ public record ApiErrorResponse(
         boolean retryable,
         Long currentVersion,
         String correlationId,
+        UUID conflictingResourceId,
         @JsonInclude(JsonInclude.Include.NON_NULL) List<FieldViolation> fieldViolations
 ) {
 }

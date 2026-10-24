@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 10:12 a.m.
  * @description Runs before the spring security chain so that 401/403 responses can also have a correlation id.
  */

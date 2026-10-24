@@ -3,7 +3,7 @@ package com.hugo.huds.customer.dto;
 import java.util.UUID;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-17 5:27 p.m.
  */
 public record CreateCustomerResponse(UUID customerId) {

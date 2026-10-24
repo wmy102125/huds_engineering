@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-15 12:07 p.m.
  */
 public class RolePermissions {

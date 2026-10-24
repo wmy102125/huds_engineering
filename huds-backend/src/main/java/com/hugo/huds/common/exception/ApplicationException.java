@@ -2,20 +2,20 @@ package com.hugo.huds.common.exception;
 
 import com.hugo.huds.common.error.ErrorCode;
 
-public class BusinessException extends RuntimeException {
+public class ApplicationException extends RuntimeException {
 
     private final ErrorCode errorCode;
     private final boolean retryable;
     private final Long currentVersion;
 
-    public BusinessException(
+    public ApplicationException(
             ErrorCode errorCode,
             String message
     ) {
         this(errorCode, message, false, null);
     }
 
-    public BusinessException(
+    public ApplicationException(
             ErrorCode errorCode,
             String message,
             boolean retryable,

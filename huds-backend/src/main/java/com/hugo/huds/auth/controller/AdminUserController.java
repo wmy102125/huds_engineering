@@ -4,7 +4,7 @@ import com.hugo.huds.auth.dto.ResetPasswordRequest;
 import com.hugo.huds.auth.dto.SessionInfoResponse;
 import com.hugo.huds.auth.service.SessionAdminService;
 import com.hugo.huds.common.error.ErrorCode;
-import com.hugo.huds.common.exception.BusinessException;
+import com.hugo.huds.common.exception.ApplicationException;
 import com.hugo.huds.common.trace.CorrelationIdFilter;
 import com.hugo.huds.user.repository.UsersRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 1:37 p.m.
  * @description
  * Administrator operations: list or revoke a user's sessions ("lost device") and reset a password.
@@ -76,7 +76,7 @@ public class AdminUserController {
     private UUID actorId(Authentication authentication) {
         return usersRepository.findByEmailIgnoreCase(authentication.getName())
                 .map(user -> user.getUserId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHENTICATED, "Authentication is required."));
+                .orElseThrow(() -> new ApplicationException(ErrorCode.UNAUTHENTICATED, "Authentication is required."));
     }
 
     private static String correlationId(HttpServletRequest request) {

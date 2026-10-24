@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-16 11:11 a.m.
  * Failed-login counting and temporary lockout. State lives in the database, not in memory, so it
  * survives restarts and works with more than one application instance.

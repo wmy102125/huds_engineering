@@ -1,135 +1,66 @@
 package com.hugo.huds.appliance.entity;
 
+import com.hugo.huds.auth.persistence.AuthoredAuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import org.hibernate.annotations.CreationTimestamp;
-
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
+import org.hibernate.annotations.SQLRestriction;
 
 /**
  * JPA entity mapped to the existing {@code appliance_service_addresses} table.
  *
- * <p>The database schema is managed by Flyway. Hibernate must not be used
- * to create or update this table.</p>
+ * <p>Links an appliance to a service address where it has been seen. Repeat repairs at the
+ * same address reuse the existing row. The database schema is managed by Flyway. The audit
+ * columns are inherited from {@link AuthoredAuditableEntity} and filled automatically.</p>
  */
 @Entity
 @Table(name = "appliance_service_addresses")
-public class ApplianceServiceAddress {
+@SQLRestriction("archived_at IS NULL")
+@Setter
+@Getter
+public class ApplianceServiceAddress extends AuthoredAuditableEntity {
 
-  @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  @Column(name = "appliance_service_address_id", nullable = false, updatable = false)
-  private UUID applianceServiceAddressId;
+    // The id is supplied by the caller (the client generates it offline), so there is no @GeneratedValue.
+    @Id
+    @Column(name = "appliance_service_address_id", nullable = false, updatable = false)
+    private UUID applianceServiceAddressId;
 
-  @Column(name = "appliance_id", nullable = false)
-  private UUID applianceId;
+    // The (appliance, address) pair never changes after creation: archive and create a new link instead.
+    @Column(name = "appliance_id", nullable = false, updatable = false)
+    private UUID applianceId;
 
-  @Column(name = "service_address_id", nullable = false)
-  private UUID serviceAddressId;
+    @Column(name = "service_address_id", nullable = false, updatable = false)
+    private UUID serviceAddressId;
 
-  @Column(name = "note")
-  private String note;
+    @Column(name = "note")
+    private String note;
 
-  @CreationTimestamp
-  @Column(name = "created_at", nullable = false, updatable = false)
-  private Instant createdAt;
+    @Column(name = "archived_at")
+    @Setter(AccessLevel.NONE)
+    private Instant archivedAt;
 
-  @Column(name = "updated_at", nullable = false)
-  private Instant updatedAt;
+    @Version
+    @Column(name = "row_version", nullable = false)
+    @Setter(AccessLevel.NONE)
+    private Long rowVersion;
 
-  @Column(name = "created_by", nullable = false)
-  private UUID createdBy;
+    public ApplianceServiceAddress() {
+        // Required by JPA.
+    }
 
-  @Column(name = "updated_by", nullable = false)
-  private UUID updatedBy;
-
-  @Column(name = "archived_at")
-  private Instant archivedAt;
-
-  @Version
-  @Column(name = "row_version", nullable = false)
-  private Long rowVersion;
-
-  public ApplianceServiceAddress() {
-    // Required by JPA.
-  }
-
-  public UUID getApplianceServiceAddressId() {
-    return applianceServiceAddressId;
-  }
-
-  public void setApplianceServiceAddressId(UUID applianceServiceAddressId) {
-    this.applianceServiceAddressId = applianceServiceAddressId;
-  }
-
-  public UUID getApplianceId() {
-    return applianceId;
-  }
-
-  public void setApplianceId(UUID applianceId) {
-    this.applianceId = applianceId;
-  }
-
-  public UUID getServiceAddressId() {
-    return serviceAddressId;
-  }
-
-  public void setServiceAddressId(UUID serviceAddressId) {
-    this.serviceAddressId = serviceAddressId;
-  }
-
-  public String getNote() {
-    return note;
-  }
-
-  public void setNote(String note) {
-    this.note = note;
-  }
-
-  public Instant getCreatedAt() {
-    return createdAt;
-  }
-
-  public void setCreatedAt(Instant createdAt) {
-    this.createdAt = createdAt;
-  }
-
-  public Instant getUpdatedAt() {
-    return updatedAt;
-  }
-
-  public void setUpdatedAt(Instant updatedAt) {
-    this.updatedAt = updatedAt;
-  }
-
-  public UUID getCreatedBy() {
-    return createdBy;
-  }
-
-  public void setCreatedBy(UUID createdBy) {
-    this.createdBy = createdBy;
-  }
-
-  public UUID getUpdatedBy() {
-    return updatedBy;
-  }
-
-  public void setUpdatedBy(UUID updatedBy) {
-    this.updatedBy = updatedBy;
-  }
-
-  public Instant getArchivedAt() {
-    return archivedAt;
-  }
-
-  public Long getRowVersion() {
-    return rowVersion;
-  }
-
+    /**
+     * Soft-deletes this link. The update is issued by dirty checking when the transaction commits.
+     *
+     * @param now the archive time
+     */
+    public void archive(Instant now) {
+        this.archivedAt = now;
+    }
 }

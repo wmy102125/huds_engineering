@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * @author meiyan wang
+ * @author Meiyan Wang
  * @date 2026-10-17 10:07 a.m
  * @description Logs entry, exit, duration and failure of every controller and service method.
  *
