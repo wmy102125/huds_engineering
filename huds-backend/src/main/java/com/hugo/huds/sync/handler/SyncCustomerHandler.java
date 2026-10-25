@@ -22,39 +22,33 @@ import java.util.UUID;
  * @date 2026-10-20 1:33 p.m.
  */
 @Component
-public class SyncCustomerHandler extends SyncAbstractHandler {
+public class SyncCustomerHandler implements SyncMutationHandler  {
 
     private final CustomerService customerService;
+    private final SyncPayloadReader payloadReader;
 
-    public SyncCustomerHandler(SyncMutationRepository syncMutationRepository, ObjectMapper objectMapper,
-                               PlatformTransactionManager txManager, Validator validator, CustomerService customerService) {
-        super(syncMutationRepository, objectMapper, txManager, validator);
+    public SyncCustomerHandler(CustomerService customerService, SyncPayloadReader payloadReader) {
         this.customerService = customerService;
+        this.payloadReader = payloadReader;
     }
-
-
-    @Override
-    protected SyncPushResultResponse doHandle(SyncPushMutationRequest syncPushRequest) {
-
-        SyncOperation operation = syncPushRequest.syncOperation();
-
-        CustomerResponse resultResponse = null;
-        UUID customerId = syncPushRequest.entityId();
-        switch (operation) {
-            case CREATE ->
-                    resultResponse = customerService.add(customerId, readPayload(syncPushRequest, CustomerRequest.class));
-            case UPDATE ->
-                    resultResponse = customerService.update(customerId, syncPushRequest.rowVersion(),readPayload(syncPushRequest, CustomerRequest.class));
-            case ARCHIVE -> resultResponse = customerService.archive(customerId,syncPushRequest.rowVersion());
-            default ->
-                    throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "Unsupported operation for CUSTOMER: " + syncPushRequest.syncOperation());
-        }
-        return SyncPushResultResponse.accepted(syncPushRequest, resultResponse.rowVersion());
-    }
-
 
     @Override
     public SyncEntityType getSyncEntityType() {
         return SyncEntityType.CUSTOMER;
+    }
+
+    @Override
+    public Long handle(UUID actorUserId, SyncPushMutationRequest mutation) {
+        UUID customerId = mutation.entityId();
+        return switch (mutation.syncOperation()) {
+            case CREATE -> customerService.add(customerId,
+                    payloadReader.read(mutation, CustomerRequest.class)).rowVersion();
+            case UPDATE -> customerService.update(customerId, payloadReader.requireRowVersion(mutation),
+                    payloadReader.read(mutation, CustomerRequest.class)).rowVersion();
+            case ARCHIVE -> customerService.archive(customerId,
+                    payloadReader.requireRowVersion(mutation)).rowVersion();
+            default -> throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                    "Unsupported operation for CUSTOMER: " + mutation.syncOperation());
+        };
     }
 }

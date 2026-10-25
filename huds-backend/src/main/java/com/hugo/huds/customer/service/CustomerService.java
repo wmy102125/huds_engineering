@@ -24,10 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -145,7 +142,16 @@ public class CustomerService {
     public CustomerDetailResponse detail(@NotNull UUID customerId) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ApplicationException(ErrorCode.NOT_FOUND, "Customer: " + customerId + " not found."));
-        Map<UUID, UserBriefResponse> userBriefResponseMap = userService.findByUserIds(List.of(customer.getCreatedBy(), customer.getUpdatedBy()));
+
+        Set<UUID> userIds = new HashSet<>();
+        if (customer.getCreatedBy() != null) {
+            userIds.add(customer.getCreatedBy());
+        }
+        if (customer.getUpdatedBy() != null) {
+            userIds.add(customer.getUpdatedBy());
+        }
+        Map<UUID, UserBriefResponse> userBriefResponseMap = userService.findByUserIds(userIds);
+
         return new CustomerDetailResponse(customerId,
                 customer.getCustomerName(),
                 customer.getEmail(),

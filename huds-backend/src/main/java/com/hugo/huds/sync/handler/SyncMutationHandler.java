@@ -19,11 +19,14 @@ public interface SyncMutationHandler {
     SyncEntityType getSyncEntityType();
 
     /**
+     * Applies the mutation by calling the business service. It runs inside the caller's transaction.
      *
-     * @param actorUserId Current user id
-     * @param syncPushRequest Front end request
+     * @param actorUserId the authenticated user who sent the mutation
+     * @param mutation    the mutation to apply
+     * @return the row version of the entity after the mutation
+     * @throws com.hugo.huds.common.exception.ApplicationException if the business rules reject the mutation
      */
-    SyncPushResultResponse handle(UUID actorUserId, SyncPushMutationRequest syncPushRequest);
+    Long handle(UUID actorUserId, SyncPushMutationRequest mutation);
 
 
 }

@@ -3,6 +3,7 @@ package com.hugo.huds.appliance.dto;
 import com.hugo.huds.user.reponse.UserBriefResponse;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -18,5 +19,6 @@ public record ApplianceModelDetailResponse(
         Instant createdAt,
         Instant updatedAt,
         UserBriefResponse createdBy,
-        UserBriefResponse updatedBy) {
+        UserBriefResponse updatedBy,
+        List<ApplianceResponse> applianceResponseList) {
 }

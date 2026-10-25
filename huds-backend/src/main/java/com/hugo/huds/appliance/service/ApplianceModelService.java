@@ -1,11 +1,10 @@
 package com.hugo.huds.appliance.service;
 
-import com.hugo.huds.appliance.dto.ApplianceModelDetailResponse;
-import com.hugo.huds.appliance.dto.ApplianceModelRequest;
-import com.hugo.huds.appliance.dto.ApplianceModelResponse;
-import com.hugo.huds.appliance.dto.ApplianceModelType;
+import com.hugo.huds.appliance.dto.*;
+import com.hugo.huds.appliance.entity.Appliance;
 import com.hugo.huds.appliance.entity.ApplianceModel;
 import com.hugo.huds.appliance.repository.ApplianceModelRepository;
+import com.hugo.huds.appliance.repository.ApplianceRepository;
 import com.hugo.huds.audit.dto.AuditAction;
 import com.hugo.huds.audit.service.AuditService;
 import com.hugo.huds.audit.service.ChangedFields;
@@ -17,7 +16,6 @@ import com.hugo.huds.user.reponse.UserBriefResponse;
 import com.hugo.huds.user.service.UserService;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -41,13 +39,15 @@ import static com.hugo.huds.common.util.ParamNomalize.normalize;
 public class ApplianceModelService {
 
     private final ApplianceModelRepository applianceModelRepository;
+    private final ApplianceRepository applianceRepository;
     private final AuditService auditService;
     private final UserService userService;
-    // Do not use the SyncEntityType.CUSTOMER, It will lead to circular dependencies.
+    // Do not use the SyncEntityType.APPLIANCE_MODEL, It will lead to circular dependencies.
     private static final String AUDIT_ENTITY_TYPE = "APPLIANCE_MODEL";
 
-    public ApplianceModelService(ApplianceModelRepository applianceModelRepository, AuditService auditService, UserService userService) {
+    public ApplianceModelService(ApplianceModelRepository applianceModelRepository, ApplianceRepository applianceRepository, AuditService auditService, UserService userService) {
         this.applianceModelRepository = applianceModelRepository;
+        this.applianceRepository = applianceRepository;
         this.auditService = auditService;
         this.userService = userService;
     }
@@ -62,15 +62,24 @@ public class ApplianceModelService {
     @Transactional
     public ApplianceModelResponse add(@NotNull UUID applianceModelId, @NotNull ApplianceModelRequest modelRequest) {
 
-        // There cannot be identical appliance
-        Optional<ApplianceModel> modelOptional = applianceModelRepository.findByApplianceTypeAndBrandAndModelNo(modelRequest.applianceType(), modelRequest.brand(), modelRequest.modelNo());
-        if (modelOptional.isPresent()) {
-            return toResponse(modelOptional.get());
+        // A retried request with the same id: the model already exists, so return it as is.
+        var existing = applianceModelRepository.findById(applianceModelId);
+        if (existing.isPresent()) {
+            return toResponse(existing.get());
+        }
+
+        String brand = normalize(modelRequest.brand());
+        String modelNo = normalize(modelRequest.modelNo());
+        if (applianceModelRepository.existsDuplicate(modelRequest.applianceType(), brand, modelNo)) {
+            throw new ApplicationException(ErrorCode.DUPLICATE_RESOURCE,
+                    "An appliance model with the same applianceType, brand and modelNo already exists.");
         }
 
         // add a new appliance model
         ApplianceModel applianceModel = new ApplianceModel();
-        BeanUtils.copyProperties(modelRequest, applianceModel);
+        applianceModel.setApplianceType(modelRequest.applianceType());
+        applianceModel.setBrand(brand);
+        applianceModel.setModelNo(modelNo);
         applianceModel.setApplianceModelId(applianceModelId);
         // saveAndFlush so that the row_version and update_at timestamp are populated before building the response.
         applianceModelRepository.saveAndFlush(applianceModel);
@@ -90,20 +99,22 @@ public class ApplianceModelService {
     public ApplianceModelResponse update(@NotNull UUID applianceModelId, @NotNull Long rowVersion, @NotNull ApplianceModelRequest modelRequest) {
 
         ApplianceModel applianceModel = findActive(applianceModelId);
-        if (applianceModelRepository.existsDuplicateExcluding(applianceModel.getApplianceType(), applianceModel.getBrand(), applianceModel.getModelNo(), applianceModelId)) {
-            throw new ApplicationException(ErrorCode.DUPLICATE_RESOURCE, "An appliance model with the same applianceType, brand and modelNo already exists. applianceModelId: " + applianceModelId + " applianceType: " + applianceModel.getApplianceType() + ", the brand: " + applianceModel.getBrand() + ", modelNo: " + applianceModel.getModelNo());
+        String brand = normalize(modelRequest.brand());
+        String modelNo = normalize(modelRequest.modelNo());
+        if (applianceModelRepository.existsDuplicateExcluding(modelRequest.applianceType(), brand, modelNo, applianceModelId)) {
+            throw new ApplicationException(ErrorCode.DUPLICATE_RESOURCE, "An appliance model with the same applianceType, brand and modelNo already exists. applianceModelId: " + applianceModelId + " applianceType: " + modelRequest.applianceType() + ", the brand: " + modelRequest.brand() + ", modelNo: " + modelRequest.modelNo());
         }
         checkVersion(applianceModel, rowVersion);
 
         // Compare before applying the change. Only the field names go to audit trail.
         ChangedFields changes = new ChangedFields()
-                .track("brand", applianceModel.getBrand(), modelRequest.brand())
                 .track("applianceType", applianceModel.getApplianceType(), modelRequest.applianceType())
-                .track("phone", applianceModel.getModelNo(), modelRequest.modelNo());
+                .track("brand", applianceModel.getBrand(), brand)
+                .track("modelNo", applianceModel.getModelNo(), modelNo);
 
         applianceModel.setApplianceType(modelRequest.applianceType());
-        applianceModel.setModelNo(modelRequest.modelNo());
-        applianceModel.setBrand(modelRequest.brand());
+        applianceModel.setBrand(brand);
+        applianceModel.setModelNo(modelNo);
         // Flush so that the row_version and update_at timestamp are new when the response is built.
         applianceModelRepository.flush();
         auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, applianceModelId, Map.of("changedFields", changes.names()));
@@ -118,11 +129,13 @@ public class ApplianceModelService {
      * @param applianceModelId the id of the appliance model to archive
      * @param rowVersion       the version on which the caller based on change
      */
+    @Transactional
     public ApplianceModelResponse archive(@NotNull UUID applianceModelId, @NotNull Long rowVersion) {
         ApplianceModel applianceModel = findActive(applianceModelId);
         checkVersion(applianceModel, rowVersion);
         applianceModel.archive(Instant.now());
         applianceModelRepository.flush();
+        auditService.recordInTransaction(AuditAction.ARCHIVE, AUDIT_ENTITY_TYPE, applianceModelId, Map.of());
         return toResponse(applianceModel);
     }
 
@@ -136,7 +149,7 @@ public class ApplianceModelService {
      * @param size               the page size ,limit to {@value PageLimits#MAX_PAGE_SIZE}
      * @return the requested page of models
      */
-    public PageResponse<ApplianceModelResponse> pageList(ApplianceModelType applianceModelType, String brand, String modelNo, int page, int size) {
+    public PageResponse<ApplianceModelResponse> pageList(@NotNull ApplianceModelType applianceModelType, String brand, String modelNo, int page, int size) {
 
         // The sort order is fixed on the server, so the client cannot sort by an arbitrary property.
         Pageable pageable = PageRequest.of(
@@ -172,11 +185,31 @@ public class ApplianceModelService {
     public ApplianceModelDetailResponse detail(@NotNull UUID applianceModelId) {
 
         ApplianceModel applianceModel = findActive(applianceModelId);
-        Map<UUID, UserBriefResponse> userBriefResponseMap = userService.findByUserIds(List.of(applianceModel.getCreatedBy(), applianceModel.getUpdatedBy()));
+        // createdBy / updatedBy can be null (e.g. seed data), and List.of() rejects null elements.
+        Set<UUID> userIds = new HashSet<>();
+        if (applianceModel.getCreatedBy() != null) {
+            userIds.add(applianceModel.getCreatedBy());
+        }
+        if (applianceModel.getUpdatedBy() != null) {
+            userIds.add(applianceModel.getUpdatedBy());
+        }
+        Map<UUID, UserBriefResponse> userBriefResponseMap = userService.findByUserIds(userIds);
+
+        // Add current applianceModel's appliance list
+        List<ApplianceResponse> appliances = applianceRepository.findByApplianceModelId(applianceModelId)
+                .stream().<ApplianceResponse>map(appliance -> {
+                    return new ApplianceResponse(appliance.getApplianceId(),
+                            appliance.getApplianceModelId(),
+                            appliance.getSerialNo(),
+                            appliance.getSerialVerified(),
+                            appliance.getIdentityNotes(),
+                            appliance.getRowVersion());
+                }).toList();
+
 
         return new ApplianceModelDetailResponse(applianceModelId, applianceModel.getApplianceType(), applianceModel.getBrand(),
                 applianceModel.getModelNo(), applianceModel.getRowVersion(), applianceModel.getCreatedAt(), applianceModel.getUpdatedAt(),
-                userBriefResponseMap.get(applianceModel.getCreatedBy()), userBriefResponseMap.get(applianceModel.getUpdatedBy()));
+                userBriefResponseMap.get(applianceModel.getCreatedBy()), userBriefResponseMap.get(applianceModel.getUpdatedBy()), appliances);
     }
 
 
@@ -184,10 +217,10 @@ public class ApplianceModelService {
         return applianceModelRepository.findById(applianceModelId)
                 .orElseThrow(() -> new ApplicationException(ErrorCode.NOT_FOUND, "Appliance model " + applianceModelId + " not found."));
     }
-
+    // Optimistic concurrency: the caller must have seen the current version
     private void checkVersion(@NotNull ApplianceModel applianceModel, @NotNull Long rowVersion) {
         if (!Objects.equals(applianceModel.getRowVersion(), rowVersion)) {
-            throw new ApplicationException(ErrorCode.DUPLICATE_RESOURCE, "The appliance has already been modified by someone else.", false, rowVersion);
+            throw new ApplicationException(ErrorCode.DUPLICATE_RESOURCE, "The appliance has already been modified by someone else.", false, applianceModel.getRowVersion());
         }
     }
 

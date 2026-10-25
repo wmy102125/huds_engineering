@@ -1,10 +1,5 @@
 package com.hugo.huds.appliance.dto;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Id;
-import org.hibernate.annotations.CreationTimestamp;
-
-import java.time.Instant;
 import java.util.UUID;
 
 /**

@@ -1,8 +1,8 @@
 package com.hugo.huds.address.service;
 
 import com.hugo.huds.address.dto.ServiceAddressDetailResponse;
-import com.hugo.huds.address.dto.ServiceAddressResponse;
 import com.hugo.huds.address.dto.ServiceAddressRequest;
+import com.hugo.huds.address.dto.ServiceAddressResponse;
 import com.hugo.huds.address.entity.ServiceAddress;
 import com.hugo.huds.address.repository.ServiceAddressRepository;
 import com.hugo.huds.audit.dto.AuditAction;
@@ -22,10 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Business operations for customer's service address.
@@ -43,8 +40,10 @@ public class ServiceAddressService {
 
     private final CustomerRepository customerRepository;
     private final ServiceAddressRepository serviceAddressRepository;
+
     private final AuditService auditService;
     private final UserService userService;
+
 
     public ServiceAddressService(CustomerRepository customerRepository, ServiceAddressRepository serviceAddressRepository, AuditService auditService, UserService userService) {
         this.customerRepository = customerRepository;
@@ -146,9 +145,10 @@ public class ServiceAddressService {
 
     /**
      * Changes the customer's default address
+     *
      * @param serviceAddressId the id of the service address
-     * @param rowVersion the version of the address caller based change on
-     * @param wantDefault the default value need to be changed
+     * @param rowVersion       the version of the address caller based change on
+     * @param wantDefault      the default value need to be changed
      * @return the updated address
      */
     @Transactional
@@ -181,7 +181,7 @@ public class ServiceAddressService {
 
         serviceAddress.setIsDefault(true);
         serviceAddressRepository.flush();
-        auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, serviceAddressId, Map.of("changedFields",List.of("isDefault")));
+        auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, serviceAddressId, Map.of("changedFields", List.of("isDefault")));
 
         return toResponse(serviceAddress);
     }
@@ -226,7 +226,14 @@ public class ServiceAddressService {
     public ServiceAddressDetailResponse detail(@NotNull UUID serviceAddressId) {
 
         ServiceAddress serviceAddress = findActive(serviceAddressId);
-        Map<UUID, UserBriefResponse> userBriefResponseMap = userService.findByUserIds(List.of(serviceAddress.getCreatedBy(), serviceAddress.getUpdatedBy()));
+        Set<UUID> userIds = new HashSet<>();
+        if (serviceAddress.getCreatedBy() != null) {
+            userIds.add(serviceAddress.getCreatedBy());
+        }
+        if (serviceAddress.getUpdatedBy() != null) {
+            userIds.add(serviceAddress.getUpdatedBy());
+        }
+        Map<UUID, UserBriefResponse> userBriefResponseMap = userService.findByUserIds(userIds);
 
         return new ServiceAddressDetailResponse(serviceAddress.getServiceAddressId(),
                 serviceAddress.getCustomerId(),
