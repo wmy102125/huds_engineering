@@ -1,10 +1,12 @@
 package com.hugo.huds.sync.dispatcher;
 
+import com.hugo.huds.sync.dto.SyncPullResponse;
 import com.hugo.huds.sync.dto.SyncPushMutationRequest;
-import com.hugo.huds.sync.handler.SyncMutationHandler;
+import com.hugo.huds.sync.handler.SyncHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -19,11 +21,11 @@ import java.util.stream.Collectors;
 @Component
 public class SyncDispatcher {
 
-    private final Map<SyncEntityType, SyncMutationHandler> handlerMap;
+    private final Map<SyncEntityType, SyncHandler> handlerMap;
 
-    public SyncDispatcher(List<SyncMutationHandler> handlers) {
+    public SyncDispatcher(List<SyncHandler> handlers) {
         this.handlerMap = handlers.stream().collect(Collectors.toMap(
-                SyncMutationHandler::getSyncEntityType,
+                SyncHandler::getSyncEntityType,
                 Function.identity(),
                 (first, second) -> {
                     throw new IllegalStateException(
@@ -49,7 +51,11 @@ public class SyncDispatcher {
      * @return the row version of the entity after the mutation
      * @throws com.hugo.huds.common.exception.ApplicationException if the business rules reject the mutation
      */
-    public Long dispatch(UUID actorUserId, SyncPushMutationRequest mutation) {
-        return handlerMap.get(mutation.entityType()).handle(actorUserId, mutation);
+    public Long pushDispatch(UUID actorUserId, SyncPushMutationRequest mutation) {
+        return handlerMap.get(mutation.entityType()).pushHandle(actorUserId, mutation);
+    }
+
+    public SyncPullResponse pullDispatch(SyncEntityType entityType, Instant since, UUID sinceId, int limit) {
+        return handlerMap.get(entityType).pullHandle(since, sinceId, limit);
     }
 }

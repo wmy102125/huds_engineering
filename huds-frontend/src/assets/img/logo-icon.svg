@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 1254" role="img" aria-labelledby="logo-title">
+<title id="logo-title">Hugo's Appliance Repair — Power, Check and Care</title>
+<!-- Official brand master: navy rounded frame, power icon and green check. -->
+<rect x="128" y="140" width="997" height="969" rx="142" fill="#FFFFFF" stroke="#0B2D5B" stroke-width="82"/>
+<path d="M 498 435 C 365 499 300 664 458 836" fill="none" stroke="#0B2D5B" stroke-width="96" stroke-linecap="round"/>
+<path d="M 752 435 C 896 503 934 655 851 755" fill="none" stroke="#0B2D5B" stroke-width="96" stroke-linecap="round"/>
+<path d="M 625 284 V 506" fill="none" stroke="#0B2D5B" stroke-width="96" stroke-linecap="round"/>
+<!-- Check overlays the bottom of the blue ring, corner stays on the vertical centerline. -->
+<path d="M 458 836 L 610 978 L 851 755" fill="none" stroke="#00E676" stroke-width="95" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

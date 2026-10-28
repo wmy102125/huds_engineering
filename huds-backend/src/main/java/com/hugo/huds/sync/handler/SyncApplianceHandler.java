@@ -1,32 +1,25 @@
 package com.hugo.huds.sync.handler;
 
-import com.hugo.huds.appliance.dto.ApplianceModelRequest;
-import com.hugo.huds.appliance.dto.ApplianceModelResponse;
 import com.hugo.huds.appliance.dto.ApplianceRequest;
-import com.hugo.huds.appliance.dto.ApplianceResponse;
 import com.hugo.huds.appliance.service.ApplianceService;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
-import com.hugo.huds.customer.dto.CustomerRequest;
-import com.hugo.huds.customer.dto.CustomerResponse;
 import com.hugo.huds.sync.dispatcher.SyncEntityType;
-import com.hugo.huds.sync.dispatcher.SyncOperation;
+import com.hugo.huds.sync.dto.SyncPullResponse;
 import com.hugo.huds.sync.dto.SyncPushMutationRequest;
-import com.hugo.huds.sync.dto.SyncPushResultResponse;
-import com.hugo.huds.sync.repository.SyncMutationRepository;
-import jakarta.validation.Validator;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.util.UUID;
 
 /**
+ * Applies APPLIANCE mutations by calling {@link ApplianceService}.
+ *
  * @author Meiyan Wang
- * @date 2026-10-24 8:43 p.m.
+ * @date 2026-10-24 8:43 p.m.
  */
 @Component
-public class SyncApplianceHandler implements SyncMutationHandler {
+public class SyncApplianceHandler implements SyncHandler {
 
     private final ApplianceService applianceService;
     private final SyncPayloadReader payloadReader;
@@ -37,25 +30,27 @@ public class SyncApplianceHandler implements SyncMutationHandler {
     }
 
     @Override
-    public Long handle(UUID actorUserId, SyncPushMutationRequest request) {
-        SyncOperation operation = request.syncOperation();
-
-        ApplianceResponse resultResponse = null;
-        UUID applianceId = request.entityId();
-        switch (operation) {
-            case CREATE ->
-                    resultResponse = applianceService.add(applianceId, payloadReader.read(request, ApplianceRequest.class));
-            case UPDATE ->
-                    resultResponse = applianceService.update(applianceId, request.rowVersion(), payloadReader.read(request, ApplianceRequest.class));
-            case ARCHIVE -> resultResponse = applianceService.archive(applianceId, request.rowVersion());
-            default ->
-                    throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "Unsupported operation for CUSTOMER: " + request.syncOperation());
-        }
-        return SyncPushResultResponse.accepted(request, resultResponse.rowVersion());
+    public SyncEntityType getSyncEntityType() {
+        return SyncEntityType.APPLIANCE;
     }
 
     @Override
-    public SyncEntityType getSyncEntityType() {
-        return SyncEntityType.APPLIANCE;
+    public Long pushHandle(UUID actorUserId, SyncPushMutationRequest mutation) {
+        UUID applianceId = mutation.entityId();
+        return switch (mutation.operation()) {
+            case CREATE -> applianceService.add(applianceId,
+                    payloadReader.read(mutation, ApplianceRequest.class)).rowVersion();
+            case UPDATE -> applianceService.update(applianceId, payloadReader.requireRowVersion(mutation),
+                    payloadReader.read(mutation, ApplianceRequest.class)).rowVersion();
+            case ARCHIVE -> applianceService.archive(applianceId,
+                    payloadReader.requireRowVersion(mutation)).rowVersion();
+            default -> throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                    "Unsupported operation for APPLIANCE: " + mutation.operation());
+        };
+    }
+
+    @Override
+    public SyncPullResponse pullHandle(Instant since, UUID sinceId, int limit) {
+        return applianceService.fetchChanges(since, sinceId, limit);
     }
 }

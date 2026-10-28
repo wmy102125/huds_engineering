@@ -13,6 +13,5 @@ public record ApplianceModelRequest(
         @NotBlank(message = "Appliance type is required")
         String applianceType,
         String brand,
-        String modelNo,
-        long rowVersion) {
+        String modelNo) {
 }

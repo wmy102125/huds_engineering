@@ -1,14 +1,14 @@
--- HADS Phase 1 baseline DDL | PostgreSQL 17+ | consolidated 2026-10-19
--- Review before production. Application must enforce state machines, authorization and evidence immutability.
+-- HADS Phase 1 baseline DDL | PostgreSQL 17+ | rebuilt 2026-10-28
+-- Single baseline migration. Run it on an EMPTY database.
+-- Application must enforce state machines, authorization and evidence immutability.
 --
--- This file replaces the former V001 + V002 (auth session / lockout) + V003 (customer integrity)
--- and adds, before the first real deployment:
---   * created_at / updated_at on every table that is modified after insertion (users + all tables
---     with row_version). updated_at is maintained by the application (JPA auditing).
---     Append-only tables (events, evidence, measurements, audit log, sync_mutations) intentionally
---     have no updated_at.
---   * sync_mutations.client_recorded_at (when the action was performed on the offline device).
--- From the first deployment on, this file must never be edited: add new migrations instead.
+-- Changes against the 2026-10-22 version:
+--   * the appliance-to-address link table is removed: an appliance is independent of customer and address.
+--   * diagnostic_cases links appliance, customer and service address directly (one case = one appliance).
+--   * (updated_at, id) indexes on the four synced tables, used by the incremental pull API.
+--   * unique serial number per model.
+-- updated_at is maintained by the application (JPA auditing) and drives the pull cursor.
+-- From the first real deployment on, this file must never be edited: add new migrations instead.
 
 --BEGIN;
 -- Spring Session JDBC tables (session store, see ADR-013).
@@ -94,16 +94,16 @@ CREATE UNIQUE INDEX ux_service_addresses_one_default
     WHERE is_default = true AND archived_at IS NULL;
 
 CREATE TABLE appliance_models (
-                                  appliance_model_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                                  appliance_type text NOT NULL,
-                                  brand text,
-                                  model_no text,
-                                  created_at timestamptz NOT NULL DEFAULT now(),
-                                  updated_at timestamptz NOT NULL DEFAULT now(),
-                                  created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                                  updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                                  archived_at timestamptz,
-                                  row_version bigint NOT NULL DEFAULT 0
+                            appliance_model_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                            appliance_type text NOT NULL,
+                            brand text,
+                            model_no text,
+                            created_at timestamptz NOT NULL DEFAULT now(),
+                            updated_at timestamptz NOT NULL DEFAULT now(),
+                            created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                            updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                            archived_at timestamptz,
+                            row_version bigint NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX ux_appliance_models_identity
     ON appliance_models (lower(appliance_type), coalesce(lower(brand), ''), coalesce(lower(model_no), ''))
@@ -123,27 +123,22 @@ CREATE TABLE appliances (
                             row_version bigint NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_appliance_identity ON appliances(appliance_model_id, serial_no);
+-- The same serial number cannot exist twice for one model (active rows only).
+CREATE UNIQUE INDEX uq_appliances_model_serial
+    ON appliances (appliance_model_id, lower(serial_no))
+    WHERE archived_at IS NULL AND serial_no IS NOT NULL AND serial_no <> '';
 
-CREATE TABLE appliance_service_addresses (
-                                             appliance_service_address_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                                             appliance_id uuid NOT NULL REFERENCES appliances(appliance_id) ON DELETE RESTRICT,
-                                             service_address_id uuid NOT NULL REFERENCES service_addresses(service_address_id) ON DELETE RESTRICT,
-                                             note text,
-                                             created_at timestamptz NOT NULL DEFAULT now(),
-                                             updated_at timestamptz NOT NULL DEFAULT now(),
-                                             created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                                             updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                                             archived_at timestamptz,
-                                             row_version bigint NOT NULL DEFAULT 0
-);
--- One active link per (appliance, address): repeat repairs at the same address reuse the existing row.
-CREATE UNIQUE INDEX ux_appliance_service_addresses_pair
-    ON appliance_service_addresses (appliance_id, service_address_id) WHERE archived_at IS NULL;
-CREATE INDEX idx_appliance_service_addresses_address ON appliance_service_addresses (service_address_id);
+-- Incremental pull: ordered by (updated_at, id).
+CREATE INDEX idx_customers_changes ON customers (updated_at, customer_id);
+CREATE INDEX idx_service_addresses_changes ON service_addresses (updated_at, service_address_id);
+CREATE INDEX idx_appliance_models_changes ON appliance_models (updated_at, appliance_model_id);
+CREATE INDEX idx_appliances_changes ON appliances (updated_at, appliance_id);
 
 CREATE TABLE diagnostic_cases (
                                   diagnostic_case_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                                  appliance_service_address_id uuid NOT NULL REFERENCES appliance_service_addresses(appliance_service_address_id) ON DELETE RESTRICT,
+                                  appliance_id uuid NOT NULL REFERENCES appliances(appliance_id) ON DELETE RESTRICT,
+                                  customer_id uuid NOT NULL REFERENCES customers(customer_id) ON DELETE RESTRICT,
+                                  service_address_id uuid NOT NULL REFERENCES service_addresses(service_address_id) ON DELETE RESTRICT,
                                   service_address_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb,
                                   reported_symptoms text NOT NULL,
                                   error_codes text,
@@ -160,7 +155,9 @@ CREATE TABLE diagnostic_cases (
                                   CONSTRAINT ck_diagnostic_cases_closed_at CHECK (workflow_status <> 'CLOSED' OR closed_at IS NOT NULL),
                                   CONSTRAINT ck_diagnostic_cases_disposition CHECK (workflow_status <> 'CLOSED' OR disposition IS NOT NULL)
 );
-CREATE INDEX idx_case_appliance_service_address ON diagnostic_cases(appliance_service_address_id, opened_at DESC);
+CREATE INDEX idx_case_appliance ON diagnostic_cases(appliance_id, opened_at DESC);
+CREATE INDEX idx_case_customer ON diagnostic_cases(customer_id, opened_at DESC);
+CREATE INDEX idx_case_service_address ON diagnostic_cases(service_address_id);
 CREATE INDEX idx_case_status ON diagnostic_cases(workflow_status, opened_at DESC);
 
 CREATE TABLE case_state_events (

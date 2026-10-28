@@ -1,5 +1,6 @@
 package com.hugo.huds.sync.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.hugo.huds.common.api.ApiErrorResponse;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
@@ -14,6 +15,7 @@ import java.util.UUID;
  * @author Meiyan Wang
  * @date 2026-10-21 1:21 p.m.
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record SyncPushResultResponse(UUID mutationId,
                                      SyncPushStatus status,
                                      boolean replayed,
@@ -30,7 +32,10 @@ public record SyncPushResultResponse(UUID mutationId,
     public static SyncPushResultResponse rejected(SyncPushMutationRequest request, ApplicationException ex) {
         ApiErrorResponse error = new ApiErrorResponse(
                 ex.getErrorCode().name(), ex.getMessage(), ex.isRetryable(), ex.getCurrentVersion(),
-                MDC.get(CorrelationIdFilter.CORRELATION_ID), null, null);
+                MDC.get(CorrelationIdFilter.CORRELATION_ID),
+                // The id of the record that already exists (DUPLICATE_RESOURCE only), null otherwise.
+                ex.getConflictingResourceId(),
+                null);
         return new SyncPushResultResponse(request.mutationId(), SyncPushStatus.REJECTED, false,
                 request.entityType(), request.entityId(), null, null, error);
     }

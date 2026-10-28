@@ -1,60 +1,56 @@
 package com.hugo.huds.sync.handler;
 
-import com.hugo.huds.address.dto.ServiceAddressResponse;
 import com.hugo.huds.address.dto.ServiceAddressRequest;
 import com.hugo.huds.address.service.ServiceAddressService;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
 import com.hugo.huds.sync.dispatcher.SyncEntityType;
-import com.hugo.huds.sync.dispatcher.SyncOperation;
+import com.hugo.huds.sync.dto.SyncPullResponse;
 import com.hugo.huds.sync.dto.SyncPushMutationRequest;
-import com.hugo.huds.sync.dto.SyncPushResultResponse;
-import com.hugo.huds.sync.repository.SyncMutationRepository;
-import jakarta.validation.Validator;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import tools.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.util.UUID;
 
 /**
+ * Applies SERVICE_ADDRESS mutations by calling {@link ServiceAddressService}.
+ *
  * @author Meiyan Wang
- * @date 2026-10-20 1:33 p.m.
+ * @date 2026-10-20 1:33 p.m.
  */
 @Component
-public class SyncServiceAddressHandler extends SyncAbstractHandler {
+public class SyncServiceAddressHandler implements SyncHandler {
 
     private final ServiceAddressService serviceAddressService;
+    private final SyncPayloadReader payloadReader;
 
-    public SyncServiceAddressHandler(SyncMutationRepository syncMutationRepository, ObjectMapper objectMapper,
-                                     PlatformTransactionManager txManager, Validator validator, ServiceAddressService serviceAddressService) {
-        super(syncMutationRepository, objectMapper, txManager, validator);
+    public SyncServiceAddressHandler(ServiceAddressService serviceAddressService, SyncPayloadReader payloadReader) {
         this.serviceAddressService = serviceAddressService;
+        this.payloadReader = payloadReader;
     }
-
-
-    @Override
-    protected SyncPushResultResponse doHandle(SyncPushMutationRequest syncPushRequest) {
-
-        SyncOperation operation = syncPushRequest.syncOperation();
-
-        ServiceAddressResponse resultResponse = null;
-        UUID serviceAddressId = syncPushRequest.entityId();
-        switch (operation) {
-            case CREATE ->
-                    resultResponse = serviceAddressService.add(serviceAddressId, readPayload(syncPushRequest, ServiceAddressRequest.class));
-            case UPDATE ->
-                    resultResponse = serviceAddressService.update(serviceAddressId, syncPushRequest.rowVersion(),readPayload(syncPushRequest, ServiceAddressRequest.class));
-            case ARCHIVE -> resultResponse = serviceAddressService.archive(serviceAddressId,syncPushRequest.rowVersion());
-            default ->
-                    throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "Unsupported operation for SERVICE_ADDRESS: " + syncPushRequest.syncOperation());
-        }
-        return SyncPushResultResponse.accepted(syncPushRequest, resultResponse.rowVersion());
-    }
-
 
     @Override
     public SyncEntityType getSyncEntityType() {
         return SyncEntityType.SERVICE_ADDRESS;
+    }
+
+    @Override
+    public Long pushHandle(UUID actorUserId, SyncPushMutationRequest mutation) {
+        UUID serviceAddressId = mutation.entityId();
+        return switch (mutation.operation()) {
+            case CREATE -> serviceAddressService.add(serviceAddressId,
+                    payloadReader.read(mutation, ServiceAddressRequest.class)).rowVersion();
+            case UPDATE -> serviceAddressService.update(serviceAddressId, payloadReader.requireRowVersion(mutation),
+                    payloadReader.read(mutation, ServiceAddressRequest.class)).rowVersion();
+            case ARCHIVE -> serviceAddressService.archive(serviceAddressId,
+                    payloadReader.requireRowVersion(mutation)).rowVersion();
+            default -> throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                    "Unsupported operation for SERVICE_ADDRESS: " + mutation.operation());
+        };
+    }
+
+    @Override
+    public SyncPullResponse pullHandle(Instant since, UUID sinceId, int limit) {
+        return serviceAddressService.fetchChanges(since, sinceId, limit);
     }
 }

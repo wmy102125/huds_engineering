@@ -12,7 +12,7 @@ import java.util.UUID;
  * @author Meiyan Wang
  * @date 2026-10-20 10:42 a.m.
  */
-public record SyncPushMutationRequest(SyncOperation syncOperation,
+public record SyncPushMutationRequest(SyncOperation operation,
                                       UUID mutationId,
                                       UUID entityId,
                                       SyncEntityType entityType,

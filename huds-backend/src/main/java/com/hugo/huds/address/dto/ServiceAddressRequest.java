@@ -23,5 +23,6 @@ public record ServiceAddressRequest(
         @NotBlank(message = "PostalCode is required")
         String postalCode,
         @NotBlank(message = "Country code is required")
-        String countryCode) {
+        String countryCode,
+        Boolean isDefault) {
 }

@@ -63,7 +63,7 @@ public class SyncPayloadReader {
     public Long requireRowVersion(SyncPushMutationRequest request) {
         if (request.rowVersion() == null) {
             throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
-                    "rowVersion is required for " + request.syncOperation() + ".");
+                    "rowVersion is required for " + request.operation() + ".");
         }
         return request.rowVersion();
     }

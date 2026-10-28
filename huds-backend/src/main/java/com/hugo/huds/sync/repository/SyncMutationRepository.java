@@ -38,8 +38,8 @@ public interface SyncMutationRepository extends JpaRepository<SyncMutation, UUID
      */
     @Query("""
             select m.status from SyncMutation m
-            where (:actorUserId = '' or m.actorUserId = :actorUserId)
-              and (:clientMutationId = '' or m.clientMutationId = :clientMutationId)
+            where  m.actorUserId = :actorUserId
+              and  m.clientMutationId = :clientMutationId
             """)
     Optional<SyncPushStatus> findStatus(@Param("actorUserId") UUID actorUserId, @Param("clientMutationId")UUID clientMutationId);
 

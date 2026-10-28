@@ -12,7 +12,7 @@ import java.util.UUID;
 public record ApplianceRequest(
         @NotNull(message = "applianceModelId is required")
         UUID applianceModelId,
-        @NotBlank(message = "SerialNo is required")
         String serialNo,
-        String identityNotes) {
+        String identityNotes,
+        Boolean serialVerified) {
 }

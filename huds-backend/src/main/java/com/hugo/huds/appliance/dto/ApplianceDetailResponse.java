@@ -11,17 +11,16 @@ import java.util.UUID;
  * @date 2026-10-23 11:06 p.m.
  */
 public record ApplianceDetailResponse(
-        ApplianceModelResponse applianceModelResponse,
         UUID applianceId,
         UUID applianceModelId,
         String serialNo,
-        Boolean serialVerified,
+        boolean serialVerified,
         String identityNotes,
-        Long rowVersion,
+        long rowVersion,
         Instant createdAt,
         Instant updatedAt,
         UserBriefResponse createdBy,
         UserBriefResponse updatedBy,
-        List<ApplianceServiceAddressResponse> addressResponses
+        boolean archived
 ) {
 }

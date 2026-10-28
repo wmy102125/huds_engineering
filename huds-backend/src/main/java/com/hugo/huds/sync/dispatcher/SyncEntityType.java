@@ -9,5 +9,4 @@ public enum SyncEntityType {
     SERVICE_ADDRESS,
     APPLIANCE_MODEL,
     APPLIANCE,
-    APPLIANCE_SERVICE_ADDRESS
 }

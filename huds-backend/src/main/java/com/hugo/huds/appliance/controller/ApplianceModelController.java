@@ -6,13 +6,9 @@ import com.hugo.huds.appliance.dto.ApplianceModelType;
 import com.hugo.huds.appliance.service.ApplianceModelService;
 import com.hugo.huds.auth.support.RolePermissions;
 import com.hugo.huds.common.response.PageResponse;
-import org.springframework.data.repository.query.Param;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
@@ -22,7 +18,7 @@ import java.util.UUID;
  * @date 2026-10-23 10:22 p.m.
  */
 @RestController
-@RequestMapping("/api/v1/appliance/model")
+@RequestMapping("/api/v1/appliance-models")
 public class ApplianceModelController {
 
     private final ApplianceModelService applianceModelService;
@@ -32,26 +28,23 @@ public class ApplianceModelController {
     }
 
     @GetMapping("/list")
-    @PreAuthorize("hasAuthority('" + RolePermissions.CUSTOMER_WRITE + "')")
-    public ResponseEntity<List<ApplianceModelResponse>> list(@Param("applianceModelType") ApplianceModelType applianceModelType,
-                                                             @Param("brand") String brand,
-                                                             @Param("modelNo") String modelNo) {
+    public ResponseEntity<List<ApplianceModelResponse>> list(@RequestParam(value = "applianceModelType", required = false) ApplianceModelType applianceModelType,
+                                                             @RequestParam(value = "brand", required = false) String brand,
+                                                             @RequestParam(value = "modelNo", required = false) String modelNo) {
         return ResponseEntity.ok(applianceModelService.allList(applianceModelType, brand, modelNo));
     }
 
     @GetMapping("/pageList")
-    @PreAuthorize("hasAuthority('" + RolePermissions.CUSTOMER_WRITE + "')")
-    public ResponseEntity<PageResponse<ApplianceModelResponse>> pageList(@Param("applianceModelType") ApplianceModelType applianceModelType,
-                                                                         @Param("brand") String brand,
-                                                                         @Param("modelNo") String modelNo,
-                                                                         @Param("page") int page,
-                                                                         @Param("size") int size) {
+    public ResponseEntity<PageResponse<ApplianceModelResponse>> pageList(@RequestParam(value = "applianceModelType", required = false) ApplianceModelType applianceModelType,
+                                                                         @RequestParam(value = "brand", required = false) String brand,
+                                                                         @RequestParam(value = "modelNo", required = false) String modelNo,
+                                                                         @RequestParam(defaultValue = "0") int page,
+                                                                         @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(applianceModelService.pageList(applianceModelType, brand, modelNo, page, size));
     }
 
 
     @GetMapping("/{applianceModelId}")
-    @PreAuthorize("hasAuthority('" + RolePermissions.CUSTOMER_WRITE + "')")
     public ResponseEntity<ApplianceModelDetailResponse> detail(@PathVariable UUID applianceModelId) {
         return ResponseEntity.ok(applianceModelService.detail(applianceModelId));
     }

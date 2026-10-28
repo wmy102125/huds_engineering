@@ -18,5 +18,6 @@ public record CustomerDetailResponse(UUID customerId,
                                      Instant createdAt,
                                      Instant updatedAt,
                                      UserBriefResponse createdBy,
-                                     UserBriefResponse updatedBy) {
+                                     UserBriefResponse updatedBy,
+                                     boolean archived) {
 }

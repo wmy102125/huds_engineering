@@ -12,5 +12,6 @@ import lombok.Getter;
 public enum SyncOperation {
     CREATE,
     UPDATE,
-    ARCHIVE;
+    ARCHIVE,
+   ;
 }

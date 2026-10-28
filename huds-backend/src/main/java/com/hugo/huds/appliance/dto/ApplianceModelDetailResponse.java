@@ -15,10 +15,10 @@ public record ApplianceModelDetailResponse(
         String applianceType,
         String brand,
         String modelNo,
-        Long rowVersion,
+        long rowVersion,
         Instant createdAt,
         Instant updatedAt,
         UserBriefResponse createdBy,
         UserBriefResponse updatedBy,
-        List<ApplianceResponse> applianceResponseList) {
+        boolean archived) {
 }
