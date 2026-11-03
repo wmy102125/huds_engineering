@@ -37,11 +37,11 @@ public class SyncCustomerHandler implements SyncHandler {
         UUID customerId = mutation.entityId();
         return switch (mutation.operation()) {
             case CREATE -> customerService.add(customerId,
-                    payloadReader.read(mutation, CustomerRequest.class)).rowVersion();
+                    payloadReader.read(mutation, CustomerRequest.class));
             case UPDATE -> customerService.update(customerId, payloadReader.requireRowVersion(mutation),
-                    payloadReader.read(mutation, CustomerRequest.class)).rowVersion();
+                    payloadReader.read(mutation, CustomerRequest.class));
             case ARCHIVE -> customerService.archive(customerId,
-                    payloadReader.requireRowVersion(mutation)).rowVersion();
+                    payloadReader.requireRowVersion(mutation));
             default -> throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
                     "Unsupported operation for CUSTOMER: " + mutation.operation());
         };

@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * @author Meiyan Wang
  * @date 2026-10-26 2:25 a.m.
- *
+ * <p>
  * Decides whether the caller may change an entity type through the sync endpoint.
  * The permission of every entity type is declared here, in one place.
  */
@@ -26,6 +26,8 @@ public class SyncPermissionChecker {
         requiredAuthority.put(SyncEntityType.SERVICE_ADDRESS, RolePermissions.CUSTOMER_WRITE);
         requiredAuthority.put(SyncEntityType.APPLIANCE_MODEL, RolePermissions.APPLIANCE_WRITE);
         requiredAuthority.put(SyncEntityType.APPLIANCE, RolePermissions.APPLIANCE_WRITE);
+        requiredAuthority.put(SyncEntityType.CASE, RolePermissions.CASE_WRITE);
+        requiredAuthority.put(SyncEntityType.CASE_STATE_EVENT, RolePermissions.CASE_WRITE);
 
         // Fail at startup, not at request time, if a new entity type has no permission yet.
         for (SyncEntityType type : SyncEntityType.values()) {

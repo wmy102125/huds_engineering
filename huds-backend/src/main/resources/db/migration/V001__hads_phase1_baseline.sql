@@ -7,6 +7,8 @@
 --   * diagnostic_cases links appliance, customer and service address directly (one case = one appliance).
 --   * (updated_at, id) indexes on the four synced tables, used by the incremental pull API.
 --   * unique serial number per model.
+--   * case module: case_no (assigned by the server), updated_by, stricter case constraints, case_number_counters,
+--     pull indexes for diagnostic_cases and case_state_events.
 -- updated_at is maintained by the application (JPA auditing) and drives the pull cursor.
 -- From the first real deployment on, this file must never be edited: add new migrations instead.
 
@@ -94,16 +96,16 @@ CREATE UNIQUE INDEX ux_service_addresses_one_default
     WHERE is_default = true AND archived_at IS NULL;
 
 CREATE TABLE appliance_models (
-                            appliance_model_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                            appliance_type text NOT NULL,
-                            brand text,
-                            model_no text,
-                            created_at timestamptz NOT NULL DEFAULT now(),
-                            updated_at timestamptz NOT NULL DEFAULT now(),
-                            created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                            updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                            archived_at timestamptz,
-                            row_version bigint NOT NULL DEFAULT 0
+                                  appliance_model_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                  appliance_type text NOT NULL,
+                                  brand text,
+                                  model_no text,
+                                  created_at timestamptz NOT NULL DEFAULT now(),
+                                  updated_at timestamptz NOT NULL DEFAULT now(),
+                                  created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                  updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                  archived_at timestamptz,
+                                  row_version bigint NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX ux_appliance_models_identity
     ON appliance_models (lower(appliance_type), coalesce(lower(brand), ''), coalesce(lower(model_no), ''))
@@ -111,6 +113,7 @@ CREATE UNIQUE INDEX ux_appliance_models_identity
 
 CREATE TABLE appliances (
                             appliance_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                            customer_id uuid NOT NULL REFERENCES customers(customer_id) ON DELETE RESTRICT,
                             appliance_model_id uuid NOT NULL REFERENCES appliance_models(appliance_model_id) ON DELETE RESTRICT,
                             serial_no text,
                             serial_verified boolean NOT NULL DEFAULT false,
@@ -122,6 +125,7 @@ CREATE TABLE appliances (
                             archived_at timestamptz,
                             row_version bigint NOT NULL DEFAULT 0
 );
+CREATE INDEX idx_appliances_customer_id ON appliances(customer_id);
 CREATE INDEX idx_appliance_identity ON appliances(appliance_model_id, serial_no);
 -- The same serial number cannot exist twice for one model (active rows only).
 CREATE UNIQUE INDEX uq_appliances_model_serial
@@ -134,8 +138,17 @@ CREATE INDEX idx_service_addresses_changes ON service_addresses (updated_at, ser
 CREATE INDEX idx_appliance_models_changes ON appliance_models (updated_at, appliance_model_id);
 CREATE INDEX idx_appliances_changes ON appliances (updated_at, appliance_id);
 
+-- Human-readable case numbers such as 2026-0042. The number is assigned by the server when the
+-- case is accepted (offline devices show "pending" until the next pull), so numbers never clash.
+-- One counter row per year; the counter is incremented inside the transaction that creates the case.
+CREATE TABLE case_number_counters (
+                                      case_year integer PRIMARY KEY,
+                                      last_no integer NOT NULL CHECK (last_no >= 0)
+);
+
 CREATE TABLE diagnostic_cases (
                                   diagnostic_case_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                  case_no text NOT NULL UNIQUE,
                                   appliance_id uuid NOT NULL REFERENCES appliances(appliance_id) ON DELETE RESTRICT,
                                   customer_id uuid NOT NULL REFERENCES customers(customer_id) ON DELETE RESTRICT,
                                   service_address_id uuid NOT NULL REFERENCES service_addresses(service_address_id) ON DELETE RESTRICT,
@@ -148,17 +161,24 @@ CREATE TABLE diagnostic_cases (
                                   related_case_id uuid REFERENCES diagnostic_cases(diagnostic_case_id) ON DELETE RESTRICT,
                                   opened_at timestamptz NOT NULL DEFAULT now(),
                                   closed_at timestamptz,
-                                  created_by uuid REFERENCES users(user_id) ON DELETE RESTRICT,
+                                  created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
                                   created_at timestamptz NOT NULL DEFAULT now(),
                                   updated_at timestamptz NOT NULL DEFAULT now(),
+                                  updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
                                   row_version bigint NOT NULL DEFAULT 0,
-                                  CONSTRAINT ck_diagnostic_cases_closed_at CHECK (workflow_status <> 'CLOSED' OR closed_at IS NOT NULL),
-                                  CONSTRAINT ck_diagnostic_cases_disposition CHECK (workflow_status <> 'CLOSED' OR disposition IS NOT NULL)
+    -- A case is never archived. It ends as CLOSED (with a disposition) or CANCELLED.
+                                  CONSTRAINT ck_diagnostic_cases_closed_at CHECK (workflow_status NOT IN ('CLOSED', 'CANCELLED') OR closed_at IS NOT NULL),
+                                  CONSTRAINT ck_diagnostic_cases_disposition CHECK (workflow_status <> 'CLOSED' OR (disposition IS NOT NULL AND disposition <> 'CANCELLED')),
+                                  CONSTRAINT ck_diagnostic_cases_cancelled CHECK (workflow_status <> 'CANCELLED' OR disposition IS NOT DISTINCT FROM 'CANCELLED'),
+                                  CONSTRAINT ck_diagnostic_cases_hold_reason CHECK (workflow_status <> 'ON_HOLD' OR length(trim(coalesce(hold_reason, ''))) > 0),
+                                  CONSTRAINT ck_diagnostic_cases_symptoms CHECK (length(trim(reported_symptoms)) > 0)
 );
 CREATE INDEX idx_case_appliance ON diagnostic_cases(appliance_id, opened_at DESC);
 CREATE INDEX idx_case_customer ON diagnostic_cases(customer_id, opened_at DESC);
 CREATE INDEX idx_case_service_address ON diagnostic_cases(service_address_id);
 CREATE INDEX idx_case_status ON diagnostic_cases(workflow_status, opened_at DESC);
+-- Incremental pull: ordered by (updated_at, id).
+CREATE INDEX idx_cases_changes ON diagnostic_cases (updated_at, diagnostic_case_id);
 
 CREATE TABLE case_state_events (
                                    case_state_event_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -167,9 +187,14 @@ CREATE TABLE case_state_events (
                                    to_state text NOT NULL CHECK (to_state IN ('OPEN', 'DIAGNOSING', 'PENDING_AUTHORIZATION', 'PENDING_PARTS', 'IN_REPAIR', 'VERIFYING', 'ON_HOLD', 'CLOSED', 'CANCELLED')),
                                    reason text,
                                    actor_user_id uuid REFERENCES users(user_id) ON DELETE RESTRICT,
-                                   occurred_at timestamptz NOT NULL DEFAULT now()
+    -- Server time when the event was recorded. It is the pull cursor, so it only ever moves forward.
+                                   occurred_at timestamptz NOT NULL DEFAULT now(),
+    -- When the technician actually did it on the (possibly offline) device. For display only.
+                                   client_recorded_at timestamptz
 );
 CREATE INDEX idx_case_state_events_case_time ON case_state_events(diagnostic_case_id, occurred_at DESC);
+-- Incremental pull of the append-only events: ordered by (occurred_at, id).
+CREATE INDEX idx_case_state_events_changes ON case_state_events (occurred_at, case_state_event_id);
 
 CREATE TABLE service_visits (
                                 service_visit_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

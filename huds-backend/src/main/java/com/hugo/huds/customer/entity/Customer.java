@@ -1,6 +1,6 @@
 package com.hugo.huds.customer.entity;
 
-import com.hugo.huds.auth.persistence.AuthoredAuditableEntity;
+import com.hugo.huds.auth.entity.AuthoredAuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;

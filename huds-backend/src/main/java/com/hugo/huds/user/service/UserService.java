@@ -1,8 +1,8 @@
 package com.hugo.huds.user.service;
 
-import com.hugo.huds.user.entity.Users;
+import com.hugo.huds.user.entity.User;
 import com.hugo.huds.user.reponse.UserBriefResponse;
-import com.hugo.huds.user.repository.UsersRepository;
+import com.hugo.huds.user.repository.UserRepository;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,10 +22,10 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class UserService {
 
-    private final UsersRepository usersRepository;
+    private final UserRepository userRepository;
 
-    public UserService(UsersRepository usersRepository) {
-        this.usersRepository = usersRepository;
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
     }
 
     /**
@@ -41,6 +41,6 @@ public class UserService {
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return usersRepository.findAllById(ids).stream().collect(Collectors.toMap(Users::getUserId, user -> new UserBriefResponse(user.getUserId(), user.getUserName())));
+        return userRepository.findAllById(ids).stream().collect(Collectors.toMap(User::getUserId, user -> new UserBriefResponse(user.getUserId(), user.getUserName())));
     }
 }

@@ -19,7 +19,7 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "users")
-public class Users {
+public class User {
 
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
@@ -53,7 +53,7 @@ public class Users {
   @Column(name = "password_changed_at")
   private Instant passwordChangedAt;
 
-  public Users() {
+  public User() {
     // Required by JPA.
   }
 

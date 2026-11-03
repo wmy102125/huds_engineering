@@ -16,6 +16,8 @@ import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
 import com.hugo.huds.common.response.PageLimits;
 import com.hugo.huds.common.response.PageResponse;
+import com.hugo.huds.customer.repository.CustomerRepository;
+import com.hugo.huds.diagnosticcase.repository.DiagnosticCaseRepository;
 import com.hugo.huds.sync.dto.SyncPullResponse;
 import com.hugo.huds.user.reponse.UserBriefResponse;
 import com.hugo.huds.user.service.UserService;
@@ -32,11 +34,11 @@ import org.springframework.validation.annotation.Validated;
 import java.time.Instant;
 import java.util.*;
 
-import static com.hugo.huds.common.util.ParamNomalize.normalize;
+import static com.hugo.huds.common.util.ParamNormalize.normalize;
 
 /**
  * @author Meiyan Wang
- * @date 2026-10-18 6:45 p.m.
+ * @date 2026-10-18 6:45 p.m.
  */
 @Validated
 @Service
@@ -46,35 +48,43 @@ public class ApplianceService {
 
     private final ApplianceModelRepository applianceModelRepository;
     private final ApplianceRepository applianceRepository;
-    private final ServiceAddressRepository serviceAddressRepository;
     private final AuditService auditService;
     private final UserService userService;
+    private final DiagnosticCaseRepository diagnosticCaseRepository;
+    private final CustomerRepository customerRepository;
     // Do not use the SyncEntityType.APPLIANCE, It will lead to circular dependencies.
     private static final String AUDIT_ENTITY_TYPE = "APPLIANCE";
     private static final String LINK_AUDIT_ENTITY_TYPE = "APPLIANCE_SERVICE_ADDRESS";
 
-
-    public ApplianceService(ApplianceModelRepository applianceModelRepository, ApplianceRepository applianceRepository, ServiceAddressRepository serviceAddressRepository, AuditService auditService, UserService userService) {
+    public ApplianceService(ApplianceModelRepository applianceModelRepository, ApplianceRepository applianceRepository, AuditService auditService, UserService userService, DiagnosticCaseRepository diagnosticCaseRepository, CustomerRepository customerRepository) {
         this.applianceModelRepository = applianceModelRepository;
         this.applianceRepository = applianceRepository;
-        this.serviceAddressRepository = serviceAddressRepository;
         this.auditService = auditService;
         this.userService = userService;
+        this.diagnosticCaseRepository = diagnosticCaseRepository;
+        this.customerRepository = customerRepository;
     }
 
     /**
      * Creates an appliance with the id chosen by the caller (the client generated it offline).
+     * The appliance belongs to one customer, which is fixed when it is created.
      *
      * @param applianceId the id of the appliance
      * @param request     the appliance details
      * @return the created appliance
      */
     @Transactional
-    public ApplianceResponse add(@NotNull UUID applianceId, @NotNull ApplianceRequest request) {
+    public Long add(@NotNull UUID applianceId, @NotNull ApplianceRequest request) {
         // A retried request with the same id: the appliance already exists, so return it as is.
         var existing = applianceRepository.findById(applianceId);
         if (existing.isPresent()) {
-            return toResponse(existing.get());
+            return existing.get().getRowVersion();
+        }
+
+        // The owner must exist; otherwise the database would refuse the row with a foreign key error (HTTP 500).
+        UUID customerId = request.customerId();
+        if (!customerRepository.existsById(customerId)) {
+            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "The customer: " + customerId + " does not exist.");
         }
 
         UUID applianceModelId = request.applianceModelId();
@@ -86,6 +96,7 @@ public class ApplianceService {
 
         Appliance appliance = new Appliance();
         appliance.setApplianceId(applianceId);
+        appliance.setCustomerId(customerId);
         appliance.setApplianceModelId(applianceModelId);
         appliance.setIdentityNotes(request.identityNotes());
         appliance.setSerialNo(serialNo);
@@ -93,11 +104,12 @@ public class ApplianceService {
         // saveAndFlush so that the row_version and update_at timestamp are populated before building the response.
         applianceRepository.saveAndFlush(appliance);
         auditService.recordInTransaction(AuditAction.CREATE, AUDIT_ENTITY_TYPE, applianceId, Map.of());
-        return toResponse(appliance);
+        return appliance.getRowVersion();
     }
 
     /**
      * Updates an appliance ,provided the caller has seen the current version.
+     * The owner of an appliance cannot be changed.
      *
      * @param applianceId the id of the appliance
      * @param rowVersion  the version on which the caller based on change
@@ -105,9 +117,15 @@ public class ApplianceService {
      * @return the updated appliance
      */
     @Transactional
-    public ApplianceResponse update(@NotNull UUID applianceId, @NotNull Long rowVersion, @NotNull ApplianceRequest request) {
+    public Long update(@NotNull UUID applianceId, @NotNull Long rowVersion, @NotNull ApplianceRequest request) {
         Appliance appliance = findActive(applianceId);
         checkVersion(appliance, rowVersion);
+
+        // Phase 1 does not move an appliance to another customer.
+        if (!Objects.equals(appliance.getCustomerId(), request.customerId())) {
+            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                    "The customer of an appliance cannot be changed.");
+        }
 
         UUID applianceModelId = request.applianceModelId();
         findActiveApplianceModel(applianceModelId);
@@ -131,7 +149,7 @@ public class ApplianceService {
         applianceRepository.flush();
         auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, applianceId, Map.of("changedFields", changes.names()));
 
-        return toResponse(appliance);
+        return appliance.getRowVersion();
     }
 
     /**
@@ -142,7 +160,7 @@ public class ApplianceService {
      * @param rowVersion  the version on which the caller based on change
      */
     @Transactional
-    public ApplianceResponse archive(@NotNull UUID applianceId, @NotNull Long rowVersion) {
+    public Long archive(@NotNull UUID applianceId, @NotNull Long rowVersion) {
         Appliance appliance = findActive(applianceId);
         checkVersion(appliance, rowVersion);
 
@@ -150,15 +168,36 @@ public class ApplianceService {
         // if the appliance still has cases.
 
         // Inside ApplianceService.archive, after checkVersion (needs a ServiceCaseRepository):
-//        if (serviceCaseRepository.existsByApplianceId(applianceId)) {
-//            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
-//                    "The appliance still has service cases and cannot be archived.");
-//        }
+        if (diagnosticCaseRepository.existsByApplianceId(applianceId)) {
+            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                    "The appliance still has diagnostic cases and cannot be archived.");
+        }
 
         appliance.archive(Instant.now());
         applianceRepository.flush();
         auditService.recordInTransaction(AuditAction.ARCHIVE, AUDIT_ENTITY_TYPE, applianceId, Map.of());
-        return toResponse(appliance);
+        return appliance.getRowVersion();
+    }
+
+    /**
+     * Archives every active appliance of a customer; called when the customer is archived.
+     * An appliance that has cases blocks the whole archive.
+     *
+     * @param customerId the id of the customer being archived
+     */
+    @Transactional
+    public void archiveAllOfCustomer(@NotNull UUID customerId) {
+        List<Appliance> appliances = applianceRepository.findByCustomerId(customerId);
+        Instant now = Instant.now();
+        for (Appliance appliance : appliances) {
+            if (diagnosticCaseRepository.existsByApplianceId(appliance.getApplianceId())) {
+                throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                        "The appliance " + appliance.getApplianceId() + " still has diagnostic cases and cannot be archived.");
+            }
+            appliance.archive(now);
+            auditService.recordInTransaction(AuditAction.ARCHIVE, AUDIT_ENTITY_TYPE, appliance.getApplianceId(), Map.of());
+        }
+        applianceRepository.flush();
     }
 
     /**
@@ -216,6 +255,7 @@ public class ApplianceService {
 
         List<ApplianceDetailResponse> items = page.stream().map(row -> new ApplianceDetailResponse(
                 row.getApplianceId(),
+                row.getCustomerId(),
                 row.getApplianceModelId(),
                 row.getSerialNo(),
                 Boolean.TRUE.equals(row.getSerialVerified()),
@@ -258,6 +298,7 @@ public class ApplianceService {
 
         return new ApplianceDetailResponse(
                 applianceId,
+                appliance.getCustomerId(),
                 appliance.getApplianceModelId(),
                 appliance.getSerialNo(),
                 appliance.getSerialVerified(),
@@ -320,6 +361,7 @@ public class ApplianceService {
 
     private ApplianceResponse toResponse(Appliance appliance) {
         return new ApplianceResponse(appliance.getApplianceId(),
+                appliance.getCustomerId(),
                 appliance.getApplianceModelId(),
                 appliance.getSerialNo(),
                 appliance.getSerialVerified(),

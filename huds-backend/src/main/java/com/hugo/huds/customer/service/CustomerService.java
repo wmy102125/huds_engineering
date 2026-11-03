@@ -32,7 +32,7 @@ import org.springframework.validation.annotation.Validated;
 import java.time.Instant;
 import java.util.*;
 
-import static com.hugo.huds.common.util.ParamNomalize.normalize;
+import static com.hugo.huds.common.util.ParamNormalize.normalize;
 
 /**
  * Business operations for customer
@@ -68,11 +68,11 @@ public class CustomerService {
      * @return the created customer
      */
     @Transactional
-    public CustomerResponse add(@NotNull UUID customerId, @NotNull CustomerRequest request) {
+    public Long add(@NotNull UUID customerId, @NotNull CustomerRequest request) {
         // A retried request with the same id: the customer already exists, so return it as is.
         var existing = customerRepository.findById(customerId);
         if (existing.isPresent()) {
-            return toResponse(existing.get());
+            return existing.get().getRowVersion();
         }
 
         // The email is optional. When it is provided, it must not belong to another customer.
@@ -91,7 +91,7 @@ public class CustomerService {
         // saveAndFlush so that the version and audit timestamps are populated before building the response.
         customerRepository.saveAndFlush(customer);
         auditService.recordInTransaction(AuditAction.CREATE, AUDIT_ENTITY_TYPE, customerId, Map.of());
-        return toResponse(customer);
+        return customer.getRowVersion();
     }
 
 
@@ -104,7 +104,7 @@ public class CustomerService {
      * @return the updated customer
      */
     @Transactional
-    public CustomerResponse update(@NotNull UUID customerId, @NotNull Long rowVersion, @NotNull CustomerRequest updateCustomerRequest) {
+    public Long update(@NotNull UUID customerId, @NotNull Long rowVersion, @NotNull CustomerRequest updateCustomerRequest) {
 
         Customer customer = findActive(customerId);
         checkVersion(customer, rowVersion);
@@ -135,7 +135,7 @@ public class CustomerService {
         customerRepository.flush();
         auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, customerId, Map.of("changedFields", changedFields.names()));
 
-        return toResponse(customer);
+        return customer.getRowVersion();
     }
 
     /**
@@ -248,7 +248,7 @@ public class CustomerService {
      * @return the archived customer
      */
     @Transactional
-    public CustomerResponse archive(@NotNull UUID customerId, @NotNull Long rowVersion) {
+    public Long archive(@NotNull UUID customerId, @NotNull Long rowVersion) {
         Customer customer = findActive(customerId);
         checkVersion(customer, rowVersion);
 
@@ -258,7 +258,7 @@ public class CustomerService {
         customer.archive(Instant.now());
         customerRepository.flush();
         auditService.recordInTransaction(AuditAction.ARCHIVE, AUDIT_ENTITY_TYPE, customerId, Map.of());
-        return toResponse(customer);
+        return customer.getRowVersion();
     }
 
     private Customer findActive(UUID customerId) {

@@ -1,6 +1,6 @@
 package com.hugo.huds.appliance.entity;
 
-import com.hugo.huds.auth.persistence.AuthoredAuditableEntity;
+import com.hugo.huds.auth.entity.AuthoredAuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -33,6 +33,9 @@ public class Appliance extends AuthoredAuditableEntity {
 
   @Column(name = "appliance_model_id", nullable = false)
   private UUID applianceModelId;
+
+  @Column(name = "customer_id", nullable = false, updatable = false)
+  private UUID customerId;
 
   @Column(name = "serial_no")
   private String serialNo;

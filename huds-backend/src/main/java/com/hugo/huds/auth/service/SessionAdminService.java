@@ -1,13 +1,13 @@
 package com.hugo.huds.auth.service;
 
+import com.hugo.huds.user.entity.User;
 import org.springframework.stereotype.Service;
 import com.hugo.huds.audit.service.AuditService;
 import com.hugo.huds.auth.dto.SessionInfoResponse;
 import com.hugo.huds.auth.support.AuthSessionAttributes;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
-import com.hugo.huds.user.entity.Users;
-import com.hugo.huds.user.repository.UsersRepository;
+import com.hugo.huds.user.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
@@ -33,22 +33,22 @@ import java.util.UUID;
 public class SessionAdminService {
 
     private final FindByIndexNameSessionRepository<? extends Session> sessionRepository;
-    private final UsersRepository usersRepository;
+    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
 
     public SessionAdminService(FindByIndexNameSessionRepository<? extends Session> sessionRepository,
-                               UsersRepository usersRepository,
+                               UserRepository userRepository,
                                PasswordEncoder passwordEncoder,
                                AuditService auditService) {
         this.sessionRepository = sessionRepository;
-        this.usersRepository = usersRepository;
+        this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
     }
 
     public List<SessionInfoResponse> listSessions(UUID userId) {
-        Users user = requireUser(userId);
+        User user = requireUser(userId);
         List<SessionInfoResponse> result = new ArrayList<>();
         for (Session session : sessionsOf(user).values()) {
             result.add(toInfo(session));
@@ -57,7 +57,7 @@ public class SessionAdminService {
     }
 
     public void revokeSession(UUID actorUserId, UUID userId, String sessionRef, String correlationId) {
-        Users user = requireUser(userId);
+        User user = requireUser(userId);
         for (Session session : sessionsOf(user).values()) {
             if (ref(session.getId()).equals(sessionRef)) {
                 String deviceId = attr(session, AuthSessionAttributes.DEVICE_ID);
@@ -72,12 +72,12 @@ public class SessionAdminService {
 
     @Transactional
     public void resetPassword(UUID actorUserId, UUID userId, String newPassword, String correlationId) {
-        Users user = requireUser(userId);
+        User user = requireUser(userId);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setPasswordChangedAt(Instant.now());
         user.setFailedLoginAttempts(0);
         user.setLockedUntil(null);
-        usersRepository.save(user);
+        userRepository.save(user);
 
         // A reset must end every existing login of that user, on every device.
         int revoked = 0;
@@ -90,12 +90,12 @@ public class SessionAdminService {
     }
 
     // Spring Session indexes JDBC sessions by the authenticated principal name (the user's email).
-    private Map<String, ? extends Session> sessionsOf(Users user) {
+    private Map<String, ? extends Session> sessionsOf(User user) {
         return sessionRepository.findByPrincipalName(user.getEmail());
     }
 
-    private Users requireUser(UUID userId) {
-        return usersRepository.findById(userId)
+    private User requireUser(UUID userId) {
+        return userRepository.findById(userId)
                 .orElseThrow(() -> new ApplicationException(ErrorCode.NOT_FOUND, "User not found."));
     }
 

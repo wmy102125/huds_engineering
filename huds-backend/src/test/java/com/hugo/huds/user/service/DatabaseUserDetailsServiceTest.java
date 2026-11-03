@@ -1,7 +1,7 @@
 package com.hugo.huds.user.service;
 
-import com.hugo.huds.user.entity.Users;
-import com.hugo.huds.user.repository.UsersRepository;
+import com.hugo.huds.user.entity.User;
+import com.hugo.huds.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,22 +24,22 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 public class DatabaseUserDetailsServiceTest {
     @Mock
-    private UsersRepository usersRepository;
+    private UserRepository userRepository;
     @InjectMocks
     private DatabaseUserDetailsService databaseUserDetailsService;
 
     @Test
     public void findUserTest() {
         String userName = "test@example.com";
-        Users users = new Users();
-        users.setEmail(userName);
-        users.setActive(true);
-        users.setUserId(UUID.randomUUID());
-        users.setRole("ADMIN");
-        users.setUserName("test");
-        users.setPasswordHash("2!xudfyduy6w3270");
+        User user = new User();
+        user.setEmail(userName);
+        user.setActive(true);
+        user.setUserId(UUID.randomUUID());
+        user.setRole("ADMIN");
+        user.setUserName("test");
+        user.setPasswordHash("2!xudfyduy6w3270");
 
-        when(usersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(users));
+        when(userRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(user));
 
         UserDetails userDetails = databaseUserDetailsService.loadUserByUsername(userName);
         assertNotNull(userDetails);
@@ -48,12 +48,12 @@ public class DatabaseUserDetailsServiceTest {
         assertTrue(userDetails.isEnabled());
         assertTrue(userDetails.getAuthorities().stream().anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_ADMIN")));
 
-        verify(usersRepository).findByEmailIgnoreCase(userName);
+        verify(userRepository).findByEmailIgnoreCase(userName);
     }
 
     @Test
     public void userNotFoundTest() {
-        when(usersRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("test@example.com")).thenReturn(Optional.empty());
 
         assertThrows(UsernameNotFoundException.class, () -> databaseUserDetailsService.loadUserByUsername("test@example.com"));
     }
@@ -61,14 +61,14 @@ public class DatabaseUserDetailsServiceTest {
     @Test
     public void userDisabled() {
         String userName = "test@example.com";
-        Users users = new Users();
-        users.setEmail(userName);
-        users.setActive(false);
-        users.setUserId(UUID.randomUUID());
-        users.setRole("ADMIN");
-        users.setUserName("test");
-        users.setPasswordHash("2!xudfyduy6w3270");
-        when(usersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(users));
+        User user = new User();
+        user.setEmail(userName);
+        user.setActive(false);
+        user.setUserId(UUID.randomUUID());
+        user.setRole("ADMIN");
+        user.setUserName("test");
+        user.setPasswordHash("2!xudfyduy6w3270");
+        when(userRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(user));
 
         UserDetails userDetails = databaseUserDetailsService.loadUserByUsername(userName);
         assertFalse(userDetails.isEnabled());
@@ -77,14 +77,14 @@ public class DatabaseUserDetailsServiceTest {
     @Test
     public void userPasswordNull() {
         String userName = "test@example.com";
-        Users users = new Users();
-        users.setEmail(userName);
-        users.setActive(false);
-        users.setUserId(UUID.randomUUID());
-        users.setRole("ADMIN");
-        users.setUserName("test");
+        User user = new User();
+        user.setEmail(userName);
+        user.setActive(false);
+        user.setUserId(UUID.randomUUID());
+        user.setRole("ADMIN");
+        user.setUserName("test");
 
-        when(usersRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(users));
+        when(userRepository.findByEmailIgnoreCase(userName)).thenReturn(Optional.of(user));
         assertThrows(UsernameNotFoundException.class, () -> databaseUserDetailsService.loadUserByUsername(userName));
     }
 

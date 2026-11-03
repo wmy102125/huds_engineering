@@ -12,6 +12,7 @@ import java.util.UUID;
  */
 public record ApplianceDetailResponse(
         UUID applianceId,
+        UUID customerId,
         UUID applianceModelId,
         String serialNo,
         boolean serialVerified,

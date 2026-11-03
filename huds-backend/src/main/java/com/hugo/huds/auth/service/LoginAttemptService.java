@@ -1,7 +1,7 @@
 package com.hugo.huds.auth.service;
 
 import com.hugo.huds.config.AuthProperties;
-import com.hugo.huds.user.repository.UsersRepository;
+import com.hugo.huds.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,23 +22,23 @@ public class LoginAttemptService {
     /** Result of recording a failure; {@code lockedUntil} is set only when this failure triggered a lock. */
     public record FailureResult(boolean lockedNow, Instant lockedUntil) {
     }
-    private final UsersRepository usersRepository;
+    private final UserRepository userRepository;
     private final AuthProperties properties;
     private final Clock clock;
 
-    public LoginAttemptService(UsersRepository usersRepository, AuthProperties properties) {
-        this.usersRepository = usersRepository;
+    public LoginAttemptService(UserRepository userRepository, AuthProperties properties) {
+        this.userRepository = userRepository;
         this.properties = properties;
         this.clock = Clock.systemUTC();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FailureResult registerFailure(UUID userId) {
-        usersRepository.incrementFailedLoginAttempts(userId);
-        int attmpts = usersRepository.findById(userId).map(u -> u.getFailedLoginAttempts()).orElse(0);
+        userRepository.incrementFailedLoginAttempts(userId);
+        int attmpts = userRepository.findById(userId).map(u -> u.getFailedLoginAttempts()).orElse(0);
         if (attmpts >= properties.maxFailedAttempts()) {
             Instant until = clock.instant().plus(properties.lockDuration());
-            usersRepository.lockUntil(userId, until);
+            userRepository.lockUntil(userId, until);
             return new FailureResult(true, until);
         }
         return new FailureResult(false, null);
@@ -46,6 +46,6 @@ public class LoginAttemptService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void registerSuccess(UUID userId) {
-        usersRepository.clearFailures(userId);
+        userRepository.clearFailures(userId);
     }
 }

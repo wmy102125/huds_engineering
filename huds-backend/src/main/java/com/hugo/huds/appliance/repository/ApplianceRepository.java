@@ -21,6 +21,8 @@ public interface ApplianceRepository extends JpaRepository<Appliance, UUID> {
     interface ChangeRow {
         UUID getApplianceId();
 
+        UUID getCustomerId();
+
         UUID getApplianceModelId();
 
         String getSerialNo();
@@ -59,6 +61,8 @@ public interface ApplianceRepository extends JpaRepository<Appliance, UUID> {
             return getUpdatedBy() == null ? null : new UserBriefResponse(getUpdatedBy(), getUpdatedByName());
         }
     }
+
+    List<Appliance> findByCustomerId(UUID customerId);
 
     List<Appliance> findByApplianceModelId(UUID applianceModelId);
 
@@ -147,6 +151,7 @@ public interface ApplianceRepository extends JpaRepository<Appliance, UUID> {
      */
     @Query(value = """
             select a.appliance_id as applianceId,
+                   a.customer_id as customerId,
                    a.appliance_model_id as applianceModelId,
                    a.serial_no as serialNo,
                    a.serial_verified as serialVerified,

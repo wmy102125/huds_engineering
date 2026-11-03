@@ -10,8 +10,7 @@ import com.hugo.huds.audit.service.AuditService;
 import com.hugo.huds.audit.service.ChangedFields;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
-import com.hugo.huds.common.util.ParamNomalize;
-import com.hugo.huds.customer.dto.CustomerDetailResponse;
+import com.hugo.huds.common.util.ParamNormalize;
 import com.hugo.huds.customer.repository.CustomerRepository;
 import com.hugo.huds.sync.dto.SyncPullResponse;
 import com.hugo.huds.user.reponse.UserBriefResponse;
@@ -56,11 +55,11 @@ public class ServiceAddressService {
     }
 
     @Transactional
-    public ServiceAddressResponse add(@NotNull UUID serviceAddressId, @NotNull ServiceAddressRequest addressRequest) {
+    public Long add(@NotNull UUID serviceAddressId, @NotNull ServiceAddressRequest addressRequest) {
         // A retried request with the same id: the address already exists, so return it as is.
         var existing = serviceAddressRepository.findById(serviceAddressId);
         if (existing.isPresent()) {
-            return toResponse(existing.get());
+            return existing.get().getRowVersion();
         }
 
         UUID customerId = addressRequest.customerId();
@@ -68,10 +67,10 @@ public class ServiceAddressService {
 
         // Normalize first, so that the stored values are exactly what the duplicate check compares.
         String addressLine1 = addressRequest.addressLine1().trim();
-        String addressLine2 = ParamNomalize.normalize(addressRequest.addressLine2());
+        String addressLine2 = ParamNormalize.normalize(addressRequest.addressLine2());
         String city = addressRequest.city().trim();
         String province = addressRequest.province().trim();
-        String postalCode = ParamNomalize.normalize(addressRequest.postalCode());
+        String postalCode = ParamNormalize.normalize(addressRequest.postalCode());
         String countryCode = addressRequest.countryCode().trim();
 
         // The customer must not already have an identical address.
@@ -102,11 +101,11 @@ public class ServiceAddressService {
         // saveAndFlush so that the row version and audit timestamps are populated before building the response.
         serviceAddressRepository.saveAndFlush(serviceAddress);
         auditService.recordInTransaction(AuditAction.CREATE, AUDIT_ENTITY_TYPE, serviceAddressId, Map.of());
-        return toResponse(serviceAddress);
+        return serviceAddress.getRowVersion();
     }
 
     @Transactional
-    public ServiceAddressResponse update(@NotNull UUID serviceAddressId, @NotNull Long rowVersion, @NotNull ServiceAddressRequest addressRequest) {
+    public Long update(@NotNull UUID serviceAddressId, @NotNull Long rowVersion, @NotNull ServiceAddressRequest addressRequest) {
 
         ServiceAddress serviceAddress = findActive(serviceAddressId);
         checkVersion(serviceAddress, rowVersion);
@@ -119,10 +118,10 @@ public class ServiceAddressService {
         }
 
         String addressLine1 = addressRequest.addressLine1().trim();
-        String addressLine2 = ParamNomalize.normalize(addressRequest.addressLine2());
+        String addressLine2 = ParamNormalize.normalize(addressRequest.addressLine2());
         String city = addressRequest.city().trim();
         String province = addressRequest.province().trim();
-        String postalCode = ParamNomalize.normalize(addressRequest.postalCode());
+        String postalCode = ParamNormalize.normalize(addressRequest.postalCode());
         String countryCode = addressRequest.countryCode().trim();
 
         // The customer must not end up with two identical addresses.
@@ -166,7 +165,7 @@ public class ServiceAddressService {
         // Flush so that the row_version and update_at timestamp are new when the response is built.
         serviceAddressRepository.flush();
         auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, serviceAddressId, Map.of("changedFields", changes.names()));
-        return toResponse(serviceAddress);
+        return serviceAddress.getRowVersion();
     }
 
     /**
@@ -222,7 +221,7 @@ public class ServiceAddressService {
      * @return the archived address
      */
     @Transactional
-    public ServiceAddressResponse archive(@NotNull UUID serviceAddressId, @NotNull Long rowVersion) {
+    public Long archive(@NotNull UUID serviceAddressId, @NotNull Long rowVersion) {
         ServiceAddress serviceAddress = findActive(serviceAddressId);
         checkVersion(serviceAddress, rowVersion);
         // An archived address must not keep the default flag, or it could clash with the customer's next default.
@@ -230,7 +229,7 @@ public class ServiceAddressService {
         serviceAddress.archive(Instant.now());
         serviceAddressRepository.flush();
         auditService.recordInTransaction(AuditAction.ARCHIVE, AUDIT_ENTITY_TYPE, serviceAddressId, Map.of());
-        return toResponse(serviceAddress);
+        return serviceAddress.getRowVersion();
     }
 
     /**

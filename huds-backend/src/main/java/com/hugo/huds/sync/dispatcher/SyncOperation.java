@@ -13,5 +13,7 @@ public enum SyncOperation {
     CREATE,
     UPDATE,
     ARCHIVE,
+    TRANSITION,
+
    ;
 }

@@ -9,4 +9,6 @@ public enum SyncEntityType {
     SERVICE_ADDRESS,
     APPLIANCE_MODEL,
     APPLIANCE,
+    CASE,
+    CASE_STATE_EVENT
 }

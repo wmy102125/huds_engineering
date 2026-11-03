@@ -9,6 +9,7 @@ import java.util.UUID;
 public record ApplianceResponse(
         UUID applianceId,
         UUID applianceModelId,
+        UUID customerId,
         String serialNo,
         Boolean serialVerified,
         String identityNotes,

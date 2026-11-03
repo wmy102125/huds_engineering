@@ -74,3 +74,7 @@ logging:
     root: INFO
     com.hugo.huds: INFO
     org.springframework.security: INFO
+
+business:
+  # The time zone of the shop. The year of a case number is the year in this zone.
+  time-zone: America/Halifax

@@ -27,7 +27,7 @@ import org.springframework.validation.annotation.Validated;
 import java.time.Instant;
 import java.util.*;
 
-import static com.hugo.huds.common.util.ParamNomalize.normalize;
+import static com.hugo.huds.common.util.ParamNormalize.normalize;
 
 /**
  * @author Meiyan Wang
@@ -61,12 +61,12 @@ public class ApplianceModelService {
      * @return the created appliance model
      */
     @Transactional
-    public ApplianceModelResponse add(@NotNull UUID applianceModelId, @NotNull ApplianceModelRequest modelRequest) {
+    public Long add(@NotNull UUID applianceModelId, @NotNull ApplianceModelRequest modelRequest) {
 
         // A retried request with the same id: the model already exists, so return it as is.
         var existing = applianceModelRepository.findById(applianceModelId);
         if (existing.isPresent()) {
-            return toResponse(existing.get());
+            return existing.get().getRowVersion();
         }
 
         String brand = normalize(modelRequest.brand());
@@ -88,7 +88,7 @@ public class ApplianceModelService {
         // saveAndFlush so that the row_version and update_at timestamp are populated before building the response.
         applianceModelRepository.saveAndFlush(applianceModel);
         auditService.recordInTransaction(AuditAction.CREATE, AUDIT_ENTITY_TYPE, applianceModelId, Map.of());
-        return toResponse(applianceModel);
+        return applianceModel.getRowVersion();
     }
 
     /**
@@ -100,7 +100,7 @@ public class ApplianceModelService {
      * @return the updated appliance model
      */
     @Transactional
-    public ApplianceModelResponse update(@NotNull UUID applianceModelId, @NotNull Long rowVersion, @NotNull ApplianceModelRequest modelRequest) {
+    public Long update(@NotNull UUID applianceModelId, @NotNull Long rowVersion, @NotNull ApplianceModelRequest modelRequest) {
 
         ApplianceModel applianceModel = findActive(applianceModelId);
         checkVersion(applianceModel, rowVersion);
@@ -129,7 +129,7 @@ public class ApplianceModelService {
         applianceModelRepository.flush();
         auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, applianceModelId, Map.of("changedFields", changes.names()));
 
-        return toResponse(applianceModel);
+        return applianceModel.getRowVersion();
     }
 
     /**
@@ -140,7 +140,7 @@ public class ApplianceModelService {
      * @param rowVersion       the version on which the caller based on change
      */
     @Transactional
-    public ApplianceModelResponse archive(@NotNull UUID applianceModelId, @NotNull Long rowVersion) {
+    public Long archive(@NotNull UUID applianceModelId, @NotNull Long rowVersion) {
         ApplianceModel model = findActive(applianceModelId);
         checkVersion(model, rowVersion);
 
@@ -152,7 +152,7 @@ public class ApplianceModelService {
         model.archive(Instant.now());
         applianceModelRepository.flush();
         auditService.recordInTransaction(AuditAction.ARCHIVE, AUDIT_ENTITY_TYPE, applianceModelId, Map.of());
-        return toResponse(model);
+        return model.getRowVersion();
     }
 
     /**
@@ -250,8 +250,10 @@ public class ApplianceModelService {
         // Add current applianceModel's appliance list
         List<ApplianceResponse> appliances = applianceRepository.findByApplianceModelId(applianceModelId)
                 .stream().<ApplianceResponse>map(appliance -> {
-                    return new ApplianceResponse(appliance.getApplianceId(),
+                    return new ApplianceResponse(
+                            appliance.getApplianceId(),
                             appliance.getApplianceModelId(),
+                            appliance.getCustomerId(),
                             appliance.getSerialNo(),
                             appliance.getSerialVerified(),
                             appliance.getIdentityNotes(),

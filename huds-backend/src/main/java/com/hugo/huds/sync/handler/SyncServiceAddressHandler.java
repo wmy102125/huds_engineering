@@ -39,11 +39,11 @@ public class SyncServiceAddressHandler implements SyncHandler {
         UUID serviceAddressId = mutation.entityId();
         return switch (mutation.operation()) {
             case CREATE -> serviceAddressService.add(serviceAddressId,
-                    payloadReader.read(mutation, ServiceAddressRequest.class)).rowVersion();
+                    payloadReader.read(mutation, ServiceAddressRequest.class));
             case UPDATE -> serviceAddressService.update(serviceAddressId, payloadReader.requireRowVersion(mutation),
-                    payloadReader.read(mutation, ServiceAddressRequest.class)).rowVersion();
+                    payloadReader.read(mutation, ServiceAddressRequest.class));
             case ARCHIVE -> serviceAddressService.archive(serviceAddressId,
-                    payloadReader.requireRowVersion(mutation)).rowVersion();
+                    payloadReader.requireRowVersion(mutation));
             default -> throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
                     "Unsupported operation for SERVICE_ADDRESS: " + mutation.operation());
         };

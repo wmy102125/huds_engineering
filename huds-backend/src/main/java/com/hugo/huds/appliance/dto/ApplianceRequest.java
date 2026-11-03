@@ -12,6 +12,8 @@ import java.util.UUID;
 public record ApplianceRequest(
         @NotNull(message = "applianceModelId is required")
         UUID applianceModelId,
+        @NotNull(message = "CustomerId is required")
+        UUID customerId,
         String serialNo,
         String identityNotes,
         Boolean serialVerified) {

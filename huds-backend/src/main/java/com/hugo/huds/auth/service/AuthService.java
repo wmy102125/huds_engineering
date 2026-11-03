@@ -12,8 +12,8 @@ import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
 import com.hugo.huds.common.trace.CorrelationIdFilter;
 import com.hugo.huds.config.AuthProperties;
-import com.hugo.huds.user.entity.Users;
-import com.hugo.huds.user.repository.UsersRepository;
+import com.hugo.huds.user.entity.User;
+import com.hugo.huds.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -48,15 +48,15 @@ public class AuthService {
     private static final String GENERIC_FAILURE = "Invalid email or password.";
 
     private final AuthenticationManager authenticationManager;
-    private final UsersRepository usersRepository;
+    private final UserRepository userRepository;
     private final SecurityContextRepository securityContextRepository;
     private final LoginAttemptService loginAttemptService;
     private final AuditService auditService;
     private final AuthProperties properties;
 
-    public AuthService(AuthenticationManager authenticationManager, UsersRepository usersRepository, SecurityContextRepository securityContextRepository, LoginAttemptService loginAttemptService, AuditService auditService, AuthProperties properties) {
+    public AuthService(AuthenticationManager authenticationManager, UserRepository userRepository, SecurityContextRepository securityContextRepository, LoginAttemptService loginAttemptService, AuditService auditService, AuthProperties properties) {
         this.authenticationManager = authenticationManager;
-        this.usersRepository = usersRepository;
+        this.userRepository = userRepository;
         this.securityContextRepository = securityContextRepository;
         this.loginAttemptService = loginAttemptService;
         this.auditService = auditService;
@@ -88,7 +88,7 @@ public class AuthService {
         }
 
         // 2) Temporary account lock.
-        Optional<Users> existing = usersRepository.findByEmailIgnoreCase(email);
+        Optional<User> existing = userRepository.findByEmailIgnoreCase(email);
         if (existing.isPresent() && isLocked(existing.get())) {
             Map<String, Object> blocked = new HashMap<>(metadata);
             blocked.put("reason", "ACCOUNT_LOCKED");
@@ -108,7 +108,7 @@ public class AuthService {
             handleFailure(existing, ex, metadata, correlationId);
             throw new ApplicationException(ErrorCode.UNAUTHENTICATED, GENERIC_FAILURE);
         }
-        Users user = usersRepository.findByEmailIgnoreCase(authentication.getName())
+        User user = userRepository.findByEmailIgnoreCase(authentication.getName())
                 .orElseThrow(() -> new IllegalStateException("Authenticated user could not be found"));
 
         loginAttemptService.registerSuccess(user.getUserId());
@@ -171,7 +171,7 @@ public class AuthService {
 
     public MeResponse me(Authentication authentication, HttpSession session) {
         // Re-check that the account still exists and is active on every /me call.
-        Users user = usersRepository.findByEmailIgnoreCase(authentication.getName())
+        User user = userRepository.findByEmailIgnoreCase(authentication.getName())
                 .filter(u -> Boolean.TRUE.equals(u.getActive()))
                 .orElseThrow(() -> new ApplicationException(ErrorCode.UNAUTHENTICATED, "Authentication is required."));
 
@@ -189,11 +189,11 @@ public class AuthService {
                 RolePermissions.getPermissionsByRole(user.getRole()), deviceId, Instant.ofEpochMilli(expiry));
     }
 
-    private void handleFailure(Optional<Users> existing, AuthenticationException ex, Map<String, Object> metadata, String correlationId) {
+    private void handleFailure(Optional<User> existing, AuthenticationException ex, Map<String, Object> metadata, String correlationId) {
         Map<String, Object> failed = new HashMap<>(metadata);
         failed.put("knownUser", existing.isPresent());
         failed.put("reason", ex.getClass().getSimpleName());
-        UUID userId = existing.map(Users::getUserId).orElse(null);
+        UUID userId = existing.map(User::getUserId).orElse(null);
 
         auditService.record(AuditService.AUTH_LOGIN_FAILED, "USER", userId, userId, correlationId, failed);
 
@@ -207,12 +207,12 @@ public class AuthService {
         }
     }
 
-    private LoginResponse toLoginResponse(Users user) {
+    private LoginResponse toLoginResponse(User user) {
         return new LoginResponse(user.getUserId(), user.getUserName(), user.getEmail(), user.getRole(),
                 RolePermissions.getPermissionsByRole(user.getRole()));
     }
 
-    private static boolean isLocked(Users user) {
+    private static boolean isLocked(User user) {
         return user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now());
     }
 

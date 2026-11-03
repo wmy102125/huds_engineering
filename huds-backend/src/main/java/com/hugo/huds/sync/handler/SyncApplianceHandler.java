@@ -39,11 +39,11 @@ public class SyncApplianceHandler implements SyncHandler {
         UUID applianceId = mutation.entityId();
         return switch (mutation.operation()) {
             case CREATE -> applianceService.add(applianceId,
-                    payloadReader.read(mutation, ApplianceRequest.class)).rowVersion();
+                    payloadReader.read(mutation, ApplianceRequest.class));
             case UPDATE -> applianceService.update(applianceId, payloadReader.requireRowVersion(mutation),
-                    payloadReader.read(mutation, ApplianceRequest.class)).rowVersion();
+                    payloadReader.read(mutation, ApplianceRequest.class));
             case ARCHIVE -> applianceService.archive(applianceId,
-                    payloadReader.requireRowVersion(mutation)).rowVersion();
+                    payloadReader.requireRowVersion(mutation));
             default -> throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
                     "Unsupported operation for APPLIANCE: " + mutation.operation());
         };

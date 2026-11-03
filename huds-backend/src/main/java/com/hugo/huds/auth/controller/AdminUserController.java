@@ -6,7 +6,7 @@ import com.hugo.huds.auth.service.SessionAdminService;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
 import com.hugo.huds.common.trace.CorrelationIdFilter;
-import com.hugo.huds.user.repository.UsersRepository;
+import com.hugo.huds.user.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.CacheControl;
@@ -37,11 +37,11 @@ import java.util.UUID;
 public class AdminUserController {
 
     private final SessionAdminService sessionAdminService;
-    private final UsersRepository usersRepository;
+    private final UserRepository userRepository;
 
-    public AdminUserController(SessionAdminService sessionAdminService, UsersRepository usersRepository) {
+    public AdminUserController(SessionAdminService sessionAdminService, UserRepository userRepository) {
         this.sessionAdminService = sessionAdminService;
-        this.usersRepository = usersRepository;
+        this.userRepository = userRepository;
     }
     @GetMapping("/sessions")
     public ResponseEntity<List<SessionInfoResponse>> sessions(@PathVariable UUID userId) {
@@ -74,7 +74,7 @@ public class AdminUserController {
     }
 
     private UUID actorId(Authentication authentication) {
-        return usersRepository.findByEmailIgnoreCase(authentication.getName())
+        return userRepository.findByEmailIgnoreCase(authentication.getName())
                 .map(user -> user.getUserId())
                 .orElseThrow(() -> new ApplicationException(ErrorCode.UNAUTHENTICATED, "Authentication is required."));
     }

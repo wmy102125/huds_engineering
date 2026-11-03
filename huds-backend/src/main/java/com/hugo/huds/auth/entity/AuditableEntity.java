@@ -1,4 +1,4 @@
-package com.hugo.huds.auth.persistence;
+package com.hugo.huds.auth.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;

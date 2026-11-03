@@ -49,3 +49,7 @@ logging:
     org.springframework.security: INFO
     com.hugo.huds.common.logging.MethodLoggingAspect: debug
     org.hibernate.SQL: debug
+
+business:
+  # The time zone of the shop. The year of a case number is the year in this zone.
+  time-zone: America/Halifax

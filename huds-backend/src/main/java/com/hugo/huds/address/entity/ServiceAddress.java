@@ -1,6 +1,6 @@
 package com.hugo.huds.address.entity;
 
-import com.hugo.huds.auth.persistence.AuthoredAuditableEntity;
+import com.hugo.huds.auth.entity.AuthoredAuditableEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
