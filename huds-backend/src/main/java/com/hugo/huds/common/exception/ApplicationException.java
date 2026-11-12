@@ -12,6 +12,8 @@ public class ApplicationException extends RuntimeException {
     private final Long currentVersion;
     /** The id of the existing record that caused a DUPLICATE_RESOURCE error, otherwise null. */
     private UUID conflictingResourceId;
+    /**The id of the unfound record that caused a NOT_FOUND error, otherwise null.**/
+    private UUID targetId;
 
     public ApplicationException(ErrorCode errorCode,String message ) {
         this(errorCode, message, false, null);
@@ -33,6 +35,12 @@ public class ApplicationException extends RuntimeException {
     public static ApplicationException duplicate(String message, UUID conflictingResourceId) {
         ApplicationException exception = new ApplicationException(ErrorCode.DUPLICATE_RESOURCE, message);
         exception.conflictingResourceId = conflictingResourceId;
+        return exception;
+    }
+
+    public static ApplicationException notFound(String message,UUID targetId){
+        ApplicationException exception = new ApplicationException(ErrorCode.NOT_FOUND, message);
+        exception.targetId = targetId;
         return exception;
     }
 

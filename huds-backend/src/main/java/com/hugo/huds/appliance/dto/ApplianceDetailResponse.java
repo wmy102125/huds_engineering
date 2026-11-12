@@ -3,6 +3,7 @@ package com.hugo.huds.appliance.dto;
 import com.hugo.huds.user.reponse.UserBriefResponse;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +18,13 @@ public record ApplianceDetailResponse(
         String serialNo,
         boolean serialVerified,
         String identityNotes,
+        String customerAssetRef,
+        String purchaseOrderNumber,
+        LocalDate productionDate,
+        Integer estimatedAgeYears,
+        UUID schematicDocumentId,
+        String schematicLocation,
+        UUID serviceManualDocumentId,
         long rowVersion,
         Instant createdAt,
         Instant updatedAt,

@@ -14,7 +14,6 @@ public enum ErrorCode {
     VERSION_CONFLICT(HttpStatus.CONFLICT),
     INVALID_TRANSITION(HttpStatus.CONFLICT),
 
-    SAFETY_GATE_REQUIRED(HttpStatus.PRECONDITION_FAILED),
     AUTHORIZATION_REQUIRED(HttpStatus.PRECONDITION_FAILED),
 
     DOMAIN_RULE_VIOLATION(HttpStatus.UNPROCESSABLE_ENTITY),
@@ -28,7 +27,9 @@ public enum ErrorCode {
     // For the sync api error
     MUTATION_ID_REUSED(HttpStatus.CONFLICT),
     OUTBOX_OWNER_MISMATCH(HttpStatus.FORBIDDEN),
-    CURSOR_EXPIRED(HttpStatus.GONE),;
+    CURSOR_EXPIRED(HttpStatus.GONE),
+
+    ;
 
     private final HttpStatus httpStatus;
 

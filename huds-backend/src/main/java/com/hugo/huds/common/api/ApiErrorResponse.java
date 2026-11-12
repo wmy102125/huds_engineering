@@ -13,10 +13,10 @@ import java.util.UUID;
  * @param currentVersion
  * @param correlationId  api response example:
  *                       {
- *                       "code": "SAFETY_GATE_REQUIRED",
- *                       "message": "Required safety assessment is missing.",
+ *                       "code": "VERSION_CONFLICT",
+ *                       "message": "The case was changed by someone else.",
  *                       "retryable": false,
- *                       "currentVersion": null,
+ *                       "currentVersion": 4,
  *                       "correlationId": "c4e92b1f-8b74-43e9-92ab-27e55adf64ae"
  *                       }
  */

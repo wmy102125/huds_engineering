@@ -40,11 +40,14 @@ public class SyncDiagnosticCaseHndler implements SyncHandler {
             case CREATE -> diagnosticCaseService.add(
                     actorUserId,
                     diagnosticCaseId,
-                    payloadReader.read(mutation, DiagnosticCaseRequest.class),mutation.clientRecordedAt());
+                    payloadReader.read(mutation, DiagnosticCaseRequest.class), mutation.clientRecordedAt());
+            case UPDATE -> diagnosticCaseService.update(
+                    diagnosticCaseId, payloadReader.requireRowVersion(mutation),
+                    payloadReader.read(mutation, DiagnosticCaseRequest.class));
             case TRANSITION -> diagnosticCaseService.transition(
                     actorUserId,
-                    diagnosticCaseId,
-                    payloadReader.read(mutation, CaseTransitionRequest.class),mutation.clientRecordedAt());
+                    diagnosticCaseId, mutation.rowVersion(),
+                    payloadReader.read(mutation, CaseTransitionRequest.class), mutation.clientRecordedAt());
             default -> throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
                     "Unsupported operation for Diagnostic case: " + mutation.operation());
         };
@@ -52,6 +55,6 @@ public class SyncDiagnosticCaseHndler implements SyncHandler {
 
     @Override
     public SyncPullResponse pullHandle(Instant since, UUID sinceId, int limit) {
-        return diagnosticCaseService.fetchChanges(since,sinceId,limit);
+        return diagnosticCaseService.fetchChanges(since, sinceId, limit);
     }
 }

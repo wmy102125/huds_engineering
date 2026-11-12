@@ -21,7 +21,7 @@ import java.util.UUID;
 @SQLRestriction("archived_at IS NULL")
 @Getter
 @Setter
-public class ServiceAddress extends AuthoredAuditableEntity {
+  public class ServiceAddress extends AuthoredAuditableEntity {
 
   @Id
   @Column(name = "service_address_id", nullable = false, updatable = false)

@@ -2,11 +2,14 @@ package com.hugo.huds.appliance.service;
 
 import com.hugo.huds.address.repository.ServiceAddressRepository;
 import com.hugo.huds.appliance.dto.ApplianceDetailResponse;
+import com.hugo.huds.appliance.dto.ApplianceDocumentType;
 import com.hugo.huds.appliance.dto.ApplianceModelResponse;
 import com.hugo.huds.appliance.dto.ApplianceRequest;
 import com.hugo.huds.appliance.dto.ApplianceResponse;
 import com.hugo.huds.appliance.entity.Appliance;
+import com.hugo.huds.appliance.entity.ApplianceDocument;
 import com.hugo.huds.appliance.entity.ApplianceModel;
+import com.hugo.huds.appliance.repository.ApplianceDocumentRepository;
 import com.hugo.huds.appliance.repository.ApplianceModelRepository;
 import com.hugo.huds.appliance.repository.ApplianceRepository;
 import com.hugo.huds.audit.dto.AuditAction;
@@ -32,8 +35,10 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.*;
 
+import static com.hugo.huds.common.util.ParamNormalize.blankToNull;
 import static com.hugo.huds.common.util.ParamNormalize.normalize;
 
 /**
@@ -52,17 +57,19 @@ public class ApplianceService {
     private final UserService userService;
     private final DiagnosticCaseRepository diagnosticCaseRepository;
     private final CustomerRepository customerRepository;
+    private final ApplianceDocumentRepository applianceDocumentRepository;
     // Do not use the SyncEntityType.APPLIANCE, It will lead to circular dependencies.
     private static final String AUDIT_ENTITY_TYPE = "APPLIANCE";
     private static final String LINK_AUDIT_ENTITY_TYPE = "APPLIANCE_SERVICE_ADDRESS";
 
-    public ApplianceService(ApplianceModelRepository applianceModelRepository, ApplianceRepository applianceRepository, AuditService auditService, UserService userService, DiagnosticCaseRepository diagnosticCaseRepository, CustomerRepository customerRepository) {
+    public ApplianceService(ApplianceModelRepository applianceModelRepository, ApplianceRepository applianceRepository, AuditService auditService, UserService userService, DiagnosticCaseRepository diagnosticCaseRepository, CustomerRepository customerRepository, ApplianceDocumentRepository applianceDocumentRepository) {
         this.applianceModelRepository = applianceModelRepository;
         this.applianceRepository = applianceRepository;
         this.auditService = auditService;
         this.userService = userService;
         this.diagnosticCaseRepository = diagnosticCaseRepository;
         this.customerRepository = customerRepository;
+        this.applianceDocumentRepository = applianceDocumentRepository;
     }
 
     /**
@@ -92,6 +99,7 @@ public class ApplianceService {
 
         String serialNo = normalize(request.serialNo());
         checkSerialVerified(serialNo, request.serialVerified());
+        checkDocuments(request);
         throwIfDuplicate(applianceModelId, serialNo, null);
 
         Appliance appliance = new Appliance();
@@ -101,6 +109,7 @@ public class ApplianceService {
         appliance.setIdentityNotes(request.identityNotes());
         appliance.setSerialNo(serialNo);
         appliance.setSerialVerified(Boolean.TRUE.equals(request.serialVerified()));
+        applyFormFields(appliance, request);
         // saveAndFlush so that the row_version and update_at timestamp are populated before building the response.
         applianceRepository.saveAndFlush(appliance);
         auditService.recordInTransaction(AuditAction.CREATE, AUDIT_ENTITY_TYPE, applianceId, Map.of());
@@ -132,6 +141,7 @@ public class ApplianceService {
 
         String serialNo = normalize(request.serialNo());
         checkSerialVerified(serialNo, request.serialVerified());
+        checkDocuments(request);
         throwIfDuplicate(applianceModelId, serialNo, applianceId);
 
         // Compare before applying the change. Only the field names go to the audit trail.
@@ -139,12 +149,20 @@ public class ApplianceService {
                 .track("applianceModelId", appliance.getApplianceModelId(), applianceModelId)
                 .track("serialNo", appliance.getSerialNo(), serialNo)
                 .track("serialVerified", appliance.getSerialVerified(), Boolean.TRUE.equals(request.serialVerified()))
-                .track("identityNotes", appliance.getIdentityNotes(), request.identityNotes());
+                .track("identityNotes", appliance.getIdentityNotes(), request.identityNotes())
+                .track("customerAssetRef", appliance.getCustomerAssetRef(), blankToNull(request.customerAssetRef()))
+                .track("purchaseOrderNumber", appliance.getPurchaseOrderNumber(), blankToNull(request.purchaseOrderNumber()))
+                .track("productionDate", appliance.getProductionDate(), request.productionDate())
+                .track("estimatedAgeYears", appliance.getEstimatedAgeYears(), request.estimatedAgeYears())
+                .track("schematicDocumentId", appliance.getSchematicDocumentId(), request.schematicDocumentId())
+                .track("schematicLocation", appliance.getSchematicLocation(), blankToNull(request.schematicLocation()))
+                .track("serviceManualDocumentId", appliance.getServiceManualDocumentId(), request.serviceManualDocumentId());
 
         appliance.setApplianceModelId(applianceModelId);
         appliance.setSerialNo(serialNo);
         appliance.setIdentityNotes(request.identityNotes());
         appliance.setSerialVerified(Boolean.TRUE.equals(request.serialVerified()));
+        applyFormFields(appliance, request);
         // Flush so that the row_version and update_at timestamp are new when the response is built.
         applianceRepository.flush();
         auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, applianceId, Map.of("changedFields", changes.names()));
@@ -260,6 +278,13 @@ public class ApplianceService {
                 row.getSerialNo(),
                 Boolean.TRUE.equals(row.getSerialVerified()),
                 row.getIdentityNotes(),
+                row.getCustomerAssetRef(),
+                row.getPurchaseOrderNumber(),
+                row.getProductionDate() == null ? null : LocalDate.parse(row.getProductionDate()),
+                row.getEstimatedAgeYears(),
+                row.getSchematicDocumentId(),
+                row.getSchematicLocation(),
+                row.getServiceManualDocumentId(),
                 row.getRowVersion(),
                 row.getCreatedAt(),
                 row.getUpdatedAt(),
@@ -303,6 +328,13 @@ public class ApplianceService {
                 appliance.getSerialNo(),
                 appliance.getSerialVerified(),
                 appliance.getIdentityNotes(),
+                appliance.getCustomerAssetRef(),
+                appliance.getPurchaseOrderNumber(),
+                appliance.getProductionDate(),
+                appliance.getEstimatedAgeYears(),
+                appliance.getSchematicDocumentId(),
+                appliance.getSchematicLocation(),
+                appliance.getServiceManualDocumentId(),
                 appliance.getRowVersion(),
                 appliance.getCreatedAt(),
                 appliance.getUpdatedAt(),
@@ -361,11 +393,53 @@ public class ApplianceService {
 
     private ApplianceResponse toResponse(Appliance appliance) {
         return new ApplianceResponse(appliance.getApplianceId(),
-                appliance.getCustomerId(),
                 appliance.getApplianceModelId(),
+                appliance.getCustomerId(),
                 appliance.getSerialNo(),
                 appliance.getSerialVerified(),
                 appliance.getIdentityNotes(),
+                appliance.getCustomerAssetRef(),
+                appliance.getPurchaseOrderNumber(),
+                appliance.getProductionDate(),
+                appliance.getEstimatedAgeYears(),
+                appliance.getSchematicDocumentId(),
+                appliance.getSchematicLocation(),
+                appliance.getServiceManualDocumentId(),
                 appliance.getRowVersion());
+    }
+
+    /**
+     * The schematic and the service manual must be registered documents of the right kind;
+     * otherwise the database would refuse the row with a foreign key error.
+     */
+    private void checkDocuments(ApplianceRequest request) {
+        requireDocument(request.schematicDocumentId(), ApplianceDocumentType.SCHEMATIC, "schematic");
+        requireDocument(request.serviceManualDocumentId(), ApplianceDocumentType.SERVICE_MANUAL, "service manual");
+    }
+
+    private void requireDocument(UUID documentId, ApplianceDocumentType expectedType, String label) {
+        if (documentId == null) {
+            return;
+        }
+        ApplianceDocument document = applianceDocumentRepository.findById(documentId).orElseThrow(() ->
+                new ApplicationException(ErrorCode.INVALID_PAYLOAD, "The " + label + " document: " + documentId + " does not exist."));
+        if (document.getDocumentType() != expectedType) {
+            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                    "The document: " + documentId + " is not a " + label + ".");
+        }
+    }
+
+    /**
+     * Copies the diagnostic form fields of the request into the appliance.
+     * Text is trimmed and empty text is stored as null.
+     */
+    private void applyFormFields(Appliance appliance, ApplianceRequest request) {
+        appliance.setCustomerAssetRef(blankToNull(request.customerAssetRef()));
+        appliance.setPurchaseOrderNumber(blankToNull(request.purchaseOrderNumber()));
+        appliance.setProductionDate(request.productionDate());
+        appliance.setEstimatedAgeYears(request.estimatedAgeYears());
+        appliance.setSchematicDocumentId(request.schematicDocumentId());
+        appliance.setSchematicLocation(blankToNull(request.schematicLocation()));
+        appliance.setServiceManualDocumentId(request.serviceManualDocumentId());
     }
 }

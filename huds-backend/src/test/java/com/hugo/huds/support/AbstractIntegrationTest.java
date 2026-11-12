@@ -13,11 +13,19 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.net.URI;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
@@ -57,6 +65,15 @@ public abstract class AbstractIntegrationTest {
      * Testcontainers' Ryuk sidecar removes the container when the JVM exits.
      */
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17");
+    @Autowired protected MockMvc mockMvc;
+    @Autowired protected ObjectMapper objectMapper;
+    @Autowired protected JdbcTemplate jdbc;
+    @Autowired protected PasswordEncoder passwordEncoder;
+
+    /** Session cookie of the ADMIN user created before each test. */
+    protected Cookie session;
+    /** User id of the ADMIN user created before each test. */
+    protected UUID adminUserId;
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -69,15 +86,52 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
-    @Autowired protected MockMvc mockMvc;
-    @Autowired protected ObjectMapper objectMapper;
-    @Autowired protected JdbcTemplate jdbc;
-    @Autowired protected PasswordEncoder passwordEncoder;
 
-    /** Session cookie of the ADMIN user created before each test. */
-    protected Cookie session;
-    /** User id of the ADMIN user created before each test. */
-    protected UUID adminUserId;
+    private static final String MINIO_USER = "minioadmin";
+    private static final String MINIO_PASSWORD = "minioadmin";
+    private static final String TEST_BUCKET = "hads-docs-test";
+
+    /**
+     * Singleton MinIO shared by all test classes, for the same reason as {@link #POSTGRES}.
+     * It runs as root because the image otherwise cannot write to its data folder.
+     */
+    private static final GenericContainer<?> MINIO = new GenericContainer<>("cgr.dev/chainguard/minio:latest")
+            .withCommand("server", "/data")
+            .withEnv("MINIO_ROOT_USER", MINIO_USER)
+            .withEnv("MINIO_ROOT_PASSWORD", MINIO_PASSWORD)
+            .withCreateContainerCmdModifier(command -> command.withUser("0:0"))
+            .withExposedPorts(9000)
+            .waitingFor(Wait.forHttp("/minio/health/ready").forPort(9000));
+
+    @DynamicPropertySource
+    static void storage(DynamicPropertyRegistry registry) {
+        String endpoint = "http://" + MINIO.getHost() + ":";
+        if (!MINIO.isRunning()) {
+            MINIO.start();
+            createBucket("http://" + MINIO.getHost() + ":" + MINIO.getMappedPort(9000));
+        }
+        String url = "http://" + MINIO.getHost() + ":" + MINIO.getMappedPort(9000);
+        registry.add("huds.storage.endpoint", () -> url);
+        registry.add("huds.storage.bucket", () -> TEST_BUCKET);
+        registry.add("huds.storage.access-key", () -> MINIO_USER);
+        registry.add("huds.storage.secret-key", () -> MINIO_PASSWORD);
+        registry.add("huds.storage.region", () -> "ca-central-1");
+        registry.add("huds.storage.path-style", () -> "true");
+    }
+
+    /** Creates the bucket in the fresh MinIO; the container starts empty. */
+    private static void createBucket(String endpoint) {
+        try (S3Client client = S3Client.builder()
+                .endpointOverride(URI.create(endpoint))
+                .region(Region.of("ca-central-1"))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(MINIO_USER, MINIO_PASSWORD)))
+                .forcePathStyle(true)
+                .build()) {
+            client.createBucket(CreateBucketRequest.builder().bucket(TEST_BUCKET).build());
+        }
+    }
+
 
     @BeforeEach
     void loginDefaultAdmin() throws Exception {

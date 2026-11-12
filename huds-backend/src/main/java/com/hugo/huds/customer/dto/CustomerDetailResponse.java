@@ -11,6 +11,7 @@ import java.util.UUID;
  */
 public record CustomerDetailResponse(UUID customerId,
                                      String customerName,
+                                     CustomerType customerType,
                                      String email,
                                      String phone,
                                      String notes,

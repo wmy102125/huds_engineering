@@ -1,5 +1,7 @@
 package com.hugo.huds.user.service;
 
+import com.hugo.huds.sync.dto.SyncPullResponse;
+import com.hugo.huds.user.dto.UserResponse;
 import com.hugo.huds.user.entity.User;
 import com.hugo.huds.user.reponse.UserBriefResponse;
 import com.hugo.huds.user.repository.UserRepository;
@@ -7,8 +9,10 @@ import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,5 +46,21 @@ public class UserService {
             return Map.of();
         }
         return userRepository.findAllById(ids).stream().collect(Collectors.toMap(User::getUserId, user -> new UserBriefResponse(user.getUserId(), user.getUserName())));
+    }
+
+    public SyncPullResponse fetchChanges(Instant since, UUID sinceId, int limit) {
+        List<UserRepository.UserRow> rows = userRepository.findUserChanges(since, sinceId, limit + 1);
+        // There is no change row, return default response
+        if (CollectionUtils.isEmpty(rows)) {
+            return SyncPullResponse.nullListResponse(since, sinceId);
+        }
+        boolean hasMore = rows.size() > limit;
+        List<UserRepository.UserRow> page = hasMore ? rows.subList(0, limit) : rows;
+
+        List<UserResponse> responses = page.stream()
+                .map(row -> new UserResponse(row.getUserId(), row.getUserName(), row.getRole(), Boolean.TRUE.equals(row.getActive())))
+                .toList();
+        UserRepository.UserRow last = page.get(page.size() - 1);
+        return new SyncPullResponse(responses, last.getUpdatedAt(), last.getUserId(), hasMore);
     }
 }

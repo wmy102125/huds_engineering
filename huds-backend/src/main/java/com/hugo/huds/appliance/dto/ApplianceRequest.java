@@ -1,8 +1,9 @@
 package com.hugo.huds.appliance.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -16,5 +17,17 @@ public record ApplianceRequest(
         UUID customerId,
         String serialNo,
         String identityNotes,
-        Boolean serialVerified) {
+        Boolean serialVerified,
+        /* The customer's own asset or product number for this appliance. */
+        String customerAssetRef,
+        /* P.O. # on the form: the purchase order number of this appliance. */
+        String purchaseOrderNumber,
+        /* MFG DATE / EST. AGE on the form: whichever is known. */
+        LocalDate productionDate,
+        @Min(value = 0, message = "estimatedAgeYears cannot be negative")
+        Integer estimatedAgeYears,
+        /* Rows of appliance_documents. */
+        UUID schematicDocumentId,
+        String schematicLocation,
+        UUID serviceManualDocumentId) {
 }

@@ -257,6 +257,13 @@ public class ApplianceModelService {
                             appliance.getSerialNo(),
                             appliance.getSerialVerified(),
                             appliance.getIdentityNotes(),
+                            appliance.getCustomerAssetRef(),
+                            appliance.getPurchaseOrderNumber(),
+                            appliance.getProductionDate(),
+                            appliance.getEstimatedAgeYears(),
+                            appliance.getSchematicDocumentId(),
+                            appliance.getSchematicLocation(),
+                            appliance.getServiceManualDocumentId(),
                             appliance.getRowVersion());
                 }).toList();
 

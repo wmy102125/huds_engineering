@@ -1,6 +1,7 @@
 package com.hugo.huds.diagnosticcase.dto;
 
 import com.hugo.huds.user.reponse.UserBriefResponse;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Instant;
 import java.util.Map;
@@ -17,7 +18,9 @@ public record DiagnosticCaseDetailResponse(UUID diagnosticCaseId,
                                            UUID applianceId,
                                            Map<String, Object> serviceAddressSnapshot,
                                            String reportedSymptoms,
-                                           String errorCodes,
+                                           PrimarySymptom primarySymptom,
+                                           JsonNode secondarySymptoms,
+                                           JsonNode failureTiming,
                                            WorkflowStatus workflowStatus,
                                            CaseDisposition disposition,
                                            String holdReason,

@@ -1,8 +1,11 @@
 package com.hugo.huds.customer.entity;
 
 import com.hugo.huds.auth.entity.AuthoredAuditableEntity;
+import com.hugo.huds.customer.dto.CustomerType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -33,6 +36,14 @@ public class Customer extends AuthoredAuditableEntity {
 
     @Column(name = "customer_name", nullable = false)
     private String customerName;
+
+    /**
+     * Who the customer is and who pays. Hibernate always sends this column on insert,
+     * so the default is set here as well as in the database.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "customer_type", nullable = false)
+    private CustomerType customerType = CustomerType.RETAIL_COD;
 
     @Column(name = "phone")
     private String phone;

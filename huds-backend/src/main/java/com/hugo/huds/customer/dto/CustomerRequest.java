@@ -18,6 +18,8 @@ public record CustomerRequest(
         String email,
         @NotBlank(message = "Customer name is required")
         String customerName,
+        /* Who the customer is and who pays. Empty means RETAIL_COD on create and "unchanged" on update. */
+        CustomerType customerType,
         String phone,
         String notes
 ) {

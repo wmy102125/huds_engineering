@@ -22,13 +22,22 @@ public class SyncPermissionChecker {
     private final Map<SyncEntityType, String> requiredAuthority = new EnumMap<>(SyncEntityType.class);
 
     public SyncPermissionChecker() {
+        requiredAuthority.put(SyncEntityType.USER, RolePermissions.USER_MANAGE);
         requiredAuthority.put(SyncEntityType.CUSTOMER, RolePermissions.CUSTOMER_WRITE);
         requiredAuthority.put(SyncEntityType.SERVICE_ADDRESS, RolePermissions.CUSTOMER_WRITE);
         requiredAuthority.put(SyncEntityType.APPLIANCE_MODEL, RolePermissions.APPLIANCE_WRITE);
         requiredAuthority.put(SyncEntityType.APPLIANCE, RolePermissions.APPLIANCE_WRITE);
         requiredAuthority.put(SyncEntityType.CASE, RolePermissions.CASE_WRITE);
-        requiredAuthority.put(SyncEntityType.CASE_STATE_EVENT, RolePermissions.CASE_WRITE);
-
+        requiredAuthority.put(SyncEntityType.STATE_EVENT, RolePermissions.CASE_WRITE);
+        requiredAuthority.put(SyncEntityType.SERVICE_VISIT, RolePermissions.VISIT_WRITE);
+        requiredAuthority.put(SyncEntityType.SERVICE_VISIT_ASSIGN, RolePermissions.VISIT_ASSIGN);
+        requiredAuthority.put(SyncEntityType.CASE_ERROR_CODE, RolePermissions.CASE_WRITE);
+        requiredAuthority.put(SyncEntityType.VISIT_SAFETY_CHECK, RolePermissions.VISIT_WRITE);
+        requiredAuthority.put(SyncEntityType.DIAGNOSTIC_STEP, RolePermissions.VISIT_WRITE);
+        requiredAuthority.put(SyncEntityType.VISIT_COMPLETION, RolePermissions.VISIT_WRITE);
+        requiredAuthority.put(SyncEntityType.CASE_SUMMARY, RolePermissions.CASE_WRITE);
+        requiredAuthority.put(SyncEntityType.CASE_INVOICE, RolePermissions.CASE_WRITE);
+        requiredAuthority.put(SyncEntityType.CASE_INVOICE_PAYMENT, RolePermissions.CASE_WRITE);
         // Fail at startup, not at request time, if a new entity type has no permission yet.
         for (SyncEntityType type : SyncEntityType.values()) {
             if (!requiredAuthority.containsKey(type)) {

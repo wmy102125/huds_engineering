@@ -13,11 +13,12 @@ import java.util.UUID;
  *
  * @author Meiyan Wang
  */
-public record CaseStateEventResponse(
-        UUID caseStateEventId,
-        UUID diagnosticCaseId,
-        WorkflowStatus fromState,
-        WorkflowStatus toState,
+public record StateEventResponse(
+        UUID stateEventId,
+        String entityType,
+        UUID entityId,
+        String fromState,
+        String toState,
         String reason,
         UserBriefResponse actor,
         Instant occurredAt,

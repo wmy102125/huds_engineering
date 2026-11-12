@@ -1,5 +1,6 @@
 package com.hugo.huds.appliance.dto;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -13,6 +14,13 @@ public record ApplianceResponse(
         String serialNo,
         Boolean serialVerified,
         String identityNotes,
+        String customerAssetRef,
+        String purchaseOrderNumber,
+        LocalDate productionDate,
+        Integer estimatedAgeYears,
+        UUID schematicDocumentId,
+        String schematicLocation,
+        UUID serviceManualDocumentId,
         Long rowVersion
 ) {
 }

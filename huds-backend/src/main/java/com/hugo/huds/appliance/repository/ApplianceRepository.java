@@ -31,6 +31,21 @@ public interface ApplianceRepository extends JpaRepository<Appliance, UUID> {
 
         String getIdentityNotes();
 
+        String getCustomerAssetRef();
+
+        String getPurchaseOrderNumber();
+
+        // The date column read as text (YYYY-MM-DD); the service turns it into a LocalDate.
+        String getProductionDate();
+
+        Integer getEstimatedAgeYears();
+
+        UUID getSchematicDocumentId();
+
+        String getSchematicLocation();
+
+        UUID getServiceManualDocumentId();
+
         Long getRowVersion();
 
         Instant getCreatedAt();
@@ -156,6 +171,13 @@ public interface ApplianceRepository extends JpaRepository<Appliance, UUID> {
                    a.serial_no as serialNo,
                    a.serial_verified as serialVerified,
                    a.identity_notes as identityNotes,
+                   a.customer_asset_ref as customerAssetRef,
+                   a.purchase_order_number as purchaseOrderNumber,
+                   cast(a.production_date as text) as productionDate,
+                   a.estimated_age_years as estimatedAgeYears,
+                   a.schematic_document_id as schematicDocumentId,
+                   a.schematic_location as schematicLocation,
+                   a.service_manual_document_id as serviceManualDocumentId,
                    a.row_version as rowVersion,
                    a.created_at as createdAt,
                    a.created_by as createdBy,

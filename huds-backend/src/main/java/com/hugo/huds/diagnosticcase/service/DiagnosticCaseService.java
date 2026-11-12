@@ -6,28 +6,26 @@ import com.hugo.huds.appliance.entity.Appliance;
 import com.hugo.huds.appliance.repository.ApplianceRepository;
 import com.hugo.huds.audit.dto.AuditAction;
 import com.hugo.huds.audit.service.AuditService;
+import com.hugo.huds.audit.service.ChangedFields;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
-import com.hugo.huds.customer.entity.Customer;
+import com.hugo.huds.common.util.JsonFieldSupport;
 import com.hugo.huds.customer.repository.CustomerRepository;
 import com.hugo.huds.diagnosticcase.dto.*;
-import com.hugo.huds.diagnosticcase.entity.CaseStateEvent;
 import com.hugo.huds.diagnosticcase.entity.DiagnosticCase;
-import com.hugo.huds.diagnosticcase.repository.CaseStateEventRepository;
 import com.hugo.huds.diagnosticcase.repository.DiagnosticCaseRepository;
 import com.hugo.huds.sync.dto.SyncPullResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.*;
 
 import static com.hugo.huds.common.util.ParamNormalize.blankToNull;
-import static com.hugo.huds.diagnosticcase.dto.WorkflowStatus.CANCELLED;
-import static com.hugo.huds.diagnosticcase.dto.WorkflowStatus.CLOSED;
 
 /**
  * @author Meiyan Wang
@@ -45,23 +43,25 @@ public class DiagnosticCaseService {
     private final ApplianceRepository applianceRepository;
     private final CaseNumberService caseNumberService;
     private final AddressSnapshotFactory addressSnapshotFactory;
-    private final CaseStateEventRepository caseStateEventRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final StateEventService stateEventService;
+    private final JsonFieldSupport jsonFieldSupport;
 
     private static final TypeReference<Map<String, Object>> SNAPSHOT_TYPE = new TypeReference<>() {
     };
 
-    public DiagnosticCaseService(DiagnosticCaseRepository diagnosticCaseRepository, CustomerRepository customerRepository, ServiceAddressRepository serviceAddressRepository, ApplianceRepository applianceRepository, CaseNumberService caseNumberService, AddressSnapshotFactory addressSnapshotFactory, CaseStateEventRepository caseStateEventRepository, AuditService auditService, ObjectMapper objectMapper) {
+    public DiagnosticCaseService(DiagnosticCaseRepository diagnosticCaseRepository, CustomerRepository customerRepository, ServiceAddressRepository serviceAddressRepository, ApplianceRepository applianceRepository, CaseNumberService caseNumberService, AddressSnapshotFactory addressSnapshotFactory, AuditService auditService, ObjectMapper objectMapper, StateEventService stateEventService, JsonFieldSupport jsonFieldSupport) {
         this.diagnosticCaseRepository = diagnosticCaseRepository;
         this.customerRepository = customerRepository;
         this.serviceAddressRepository = serviceAddressRepository;
         this.applianceRepository = applianceRepository;
         this.caseNumberService = caseNumberService;
         this.addressSnapshotFactory = addressSnapshotFactory;
-        this.caseStateEventRepository = caseStateEventRepository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.stateEventService = stateEventService;
+        this.jsonFieldSupport = jsonFieldSupport;
     }
 
     @Transactional
@@ -72,13 +72,18 @@ public class DiagnosticCaseService {
             return existing.get().getRowVersion();
         }
 
+        // Check the JSON fields first, so a bad payload is refused before anything is read or written.
+        String secondarySymptoms = jsonFieldSupport.arrayText(request.secondarySymptoms(), "secondarySymptoms");
+        String failureTiming = jsonFieldSupport.objectText(request.failureTiming(), "failureTiming");
+
         checkExists(diagnosticCaseId, request.customerId(), request.applianceId(), request.serviceAddressId(), request.relatedCaseId());
         // Whether this appliance case already exists
-        Set<WorkflowStatus> finishedStatuses = EnumSet.of(CLOSED, CANCELLED);
-        Optional<String> unfinishedCaseNo = diagnosticCaseRepository.findUnfinishedId(request.applianceId(), request.customerId(), finishedStatuses);
-        if (unfinishedCaseNo.isPresent()) {
-            throw new ApplicationException(ErrorCode.DUPLICATE_RESOURCE, "The appliance case already exists an unfinished case: " + unfinishedCaseNo.get() + " , please finished the unfinished case.");
-        }
+        Set<WorkflowStatus> finishedStatuses = WorkflowStatus.finishedStatuses();
+        Optional<UUID> unfinishedCaseId = diagnosticCaseRepository.findUnfinishedId(request.applianceId(), request.customerId(), finishedStatuses);
+        unfinishedCaseId.ifPresent(existingId -> {
+            throw new ApplicationException(ErrorCode.DUPLICATE_RESOURCE,
+                    "The appliance already has an unfinished case, existingId: "+ existingId);
+        });
         DiagnosticCase diagnosticCase = new DiagnosticCase();
         diagnosticCase.setDiagnosticCaseId(diagnosticCaseId);
         diagnosticCase.setCaseNo(caseNumberService.nextCaseNO());
@@ -88,53 +93,121 @@ public class DiagnosticCaseService {
         diagnosticCase.setRelatedCaseId(request.relatedCaseId());
         diagnosticCase.setWorkflowStatus(WorkflowStatus.OPEN);
         diagnosticCase.setReportedSymptoms(request.reportedSymptoms().trim());
-        diagnosticCase.setErrorCodes(blankToNull(request.errorCodes()));
+        diagnosticCase.setPrimarySymptom(request.primarySymptom());
+        diagnosticCase.setSecondarySymptoms(secondarySymptoms);
+        diagnosticCase.setFailureTiming(failureTiming);
         diagnosticCase.setOpenedAt(clientRecordedAt);
         diagnosticCase.setServiceAddressSnapshot(addressSnapshotFactory.create(request.serviceAddressId(), request.customerId()));
         diagnosticCaseRepository.saveAndFlush(diagnosticCase);
 
-        CaseStateEvent event = new CaseStateEvent();
-        event.setDiagnosticCaseId(diagnosticCaseId);
-        event.setFromState(null);
-        event.setToState(WorkflowStatus.OPEN);
-        event.setOccurredAt(Instant.now());
-        event.setClientRecordedAt(clientRecordedAt);
-        event.setActorUserId(actorUserId);
-        caseStateEventRepository.save(event);
+        // Write the history entry in the same transaction.
+        stateEventService.record(StateEventEntityType.CASE, diagnosticCaseId, null, WorkflowStatus.OPEN.name(), null, actorUserId, clientRecordedAt);
 
         auditService.recordInTransaction(AuditAction.CREATE, AUDIT_ENTITY_TYPE, diagnosticCase.getDiagnosticCaseId(), Map.of());
         return diagnosticCase.getRowVersion();
     }
 
+    /**
+     * Changes the fields of an open case that the technician fills in: the reported symptoms and the
+     * symptom classification of the diagnostic form. The links (customer, appliance, address, related case)
+     * never change. An empty classification field in the request means "unchanged".
+     *
+     * @param diagnosticCaseId   the id of the case
+     * @param expectedRowVersion the version on which the caller based the change
+     * @param request            the new values
+     * @return the new row version
+     */
     @Transactional
-    public Long transition(UUID actorUserId, UUID diagnosticCaseId, CaseTransitionRequest request, Instant clientRecordedAt) {
-        // 1. Load the case and check the client saw the current version.
-        Optional<DiagnosticCase> existing = diagnosticCaseRepository.findById(diagnosticCaseId);
-        if (!existing.isPresent()) {
-            throw new ApplicationException(ErrorCode.NOT_FOUND, "The current diagnostic case: " + diagnosticCaseId + " not found.");
+    public Long update(UUID diagnosticCaseId, Long expectedRowVersion, DiagnosticCaseRequest request) {
+        // Check the JSON fields first, so a bad payload is refused before anything is read or written.
+        String secondarySymptoms = request.secondarySymptoms() == null ? null
+                : jsonFieldSupport.arrayText(request.secondarySymptoms(), "secondarySymptoms");
+        String failureTiming = request.failureTiming() == null ? null
+                : jsonFieldSupport.objectText(request.failureTiming(), "failureTiming");
+
+        DiagnosticCase diagnosticCase = diagnosticCaseRepository.findById(diagnosticCaseId)
+                .orElseThrow(() -> new ApplicationException(ErrorCode.NOT_FOUND,
+                        "The current diagnostic case: " + diagnosticCaseId + " not found."));
+
+        if (!Objects.equals(diagnosticCase.getRowVersion(), expectedRowVersion)) {
+            throw new ApplicationException(ErrorCode.VERSION_CONFLICT,
+                    "The case was changed by someone else.", false, diagnosticCase.getRowVersion());
         }
-        // Whether this appliance case already exists
-        DiagnosticCase diagnosticCase = existing.get();
+        // A finished case is read only.
+        if (WorkflowStatus.finishedStatuses().contains(diagnosticCase.getWorkflowStatus())) {
+            throw new ApplicationException(ErrorCode.DOMAIN_RULE_VIOLATION,
+                    "The case is " + diagnosticCase.getWorkflowStatus() + ", it can no longer be changed.");
+        }
+        // The links are fixed when the case is opened.
+        if (!Objects.equals(diagnosticCase.getCustomerId(), request.customerId())
+                || !Objects.equals(diagnosticCase.getApplianceId(), request.applianceId())
+                || !Objects.equals(diagnosticCase.getServiceAddressId(), request.serviceAddressId())
+                || !Objects.equals(diagnosticCase.getRelatedCaseId(), request.relatedCaseId())) {
+            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                    "The customer, appliance, address and related case of a case cannot be changed.");
+        }
+
+        String reportedSymptoms = request.reportedSymptoms().trim();
+        PrimarySymptom primarySymptom = request.primarySymptom() == null ? diagnosticCase.getPrimarySymptom() : request.primarySymptom();
+        // Compare the JSON as values, because PostgreSQL stores its own spacing of the text.
+        JsonNode oldSecondary = jsonFieldSupport.read(diagnosticCase.getSecondarySymptoms(), true);
+        JsonNode oldTiming = jsonFieldSupport.read(diagnosticCase.getFailureTiming(), false);
+        JsonNode newSecondary = secondarySymptoms == null ? oldSecondary : jsonFieldSupport.read(secondarySymptoms, true);
+        JsonNode newTiming = failureTiming == null ? oldTiming : jsonFieldSupport.read(failureTiming, false);
+
+        // Compare before applying the change. Only the field names go to the audit trail.
+        ChangedFields changedFields = new ChangedFields()
+                .track("reportedSymptoms", diagnosticCase.getReportedSymptoms(), reportedSymptoms)
+                .track("primarySymptom", diagnosticCase.getPrimarySymptom(), primarySymptom)
+                .track("secondarySymptoms", oldSecondary, newSecondary)
+                .track("failureTiming", oldTiming, newTiming);
+
+        diagnosticCase.setReportedSymptoms(reportedSymptoms);
+        diagnosticCase.setPrimarySymptom(primarySymptom);
+        if (secondarySymptoms != null) {
+            diagnosticCase.setSecondarySymptoms(secondarySymptoms);
+        }
+        if (failureTiming != null) {
+            diagnosticCase.setFailureTiming(failureTiming);
+        }
+        // Flush so that the row_version is the new one when the response is built.
+        diagnosticCaseRepository.flush();
+        auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, diagnosticCaseId,
+                Map.of("changedFields", changedFields.names()));
+        return diagnosticCase.getRowVersion();
+    }
+
+    @Transactional
+    public Long transition(UUID actorUserId, UUID diagnosticCaseId, Long expectedRowVersion, CaseTransitionRequest request, Instant clientRecordedAt) {
+        // Load the case and check the client saw the current version.
+        DiagnosticCase diagnosticCase = diagnosticCaseRepository.findById(diagnosticCaseId)
+                .orElseThrow(() -> new ApplicationException(ErrorCode.NOT_FOUND,
+                        "The current diagnostic case: " + diagnosticCaseId + " not found."));
+
+        // The client must have seen the current version; otherwise the other device wins and this one re-reads.
+        if (!diagnosticCase.getRowVersion().equals(expectedRowVersion)) {
+            throw new ApplicationException(ErrorCode.VERSION_CONFLICT,
+                    "The case was changed by someone else.", false, diagnosticCase.getRowVersion());
+        }
 
         WorkflowStatus from = diagnosticCase.getWorkflowStatus();
         WorkflowStatus to = request.toState();
-        // Check status
+        String reason = blankToNull(request.reason());
+
+        // Only needed when resuming from ON_HOLD.
         WorkflowStatus statusBeforeHold = null;
         if (from == WorkflowStatus.ON_HOLD) {
-            // Last event of this case with to_state = ON_HOLD, then take its from_state.
-            statusBeforeHold = caseStateEventRepository
-                    .findFirstByDiagnosticCaseIdAndToStateOrderByOccurredAtDescCaseStateEventIdDesc(
-                            diagnosticCaseId, WorkflowStatus.ON_HOLD)
-                    .map(CaseStateEvent::getFromState)
-                    .orElse(null);
-            // Leaving ON_HOLD: the case is no longer on hold, so the reason must not stay behind.
-            diagnosticCase.setHoldReason(null);
+            String before = stateEventService.stateBeforeHold(
+                    StateEventEntityType.CASE, diagnosticCaseId, WorkflowStatus.ON_HOLD.name());
+            statusBeforeHold = before == null ? null : WorkflowStatus.valueOf(before);
         }
 
-        String reason = blankToNull(request.reason());
-        // 3. Ask the state machine. It throws INVALID_TRANSITION or INVALID_PAYLOAD if the step is not allowed.
         CaseStateMachine.validate(from, to, reason, request.disposition(), statusBeforeHold);
-        // 4. Apply the change and the side effects of this step.
+
+        // Validation passed: now it is safe to change the entity.
+        if (from == WorkflowStatus.ON_HOLD) {
+            diagnosticCase.setHoldReason(null);
+        }
         diagnosticCase.setWorkflowStatus(to);
 
         switch (to) {
@@ -153,15 +226,7 @@ public class DiagnosticCaseService {
         diagnosticCaseRepository.flush();
 
         // 5. Write the history entry in the same transaction.
-        CaseStateEvent event = new CaseStateEvent();
-        event.setDiagnosticCaseId(diagnosticCaseId);
-        event.setFromState(from);
-        event.setToState(to);
-        event.setReason(reason);
-        event.setOccurredAt(Instant.now());
-        event.setClientRecordedAt(clientRecordedAt);
-        event.setActorUserId(actorUserId);
-        caseStateEventRepository.save(event);
+        stateEventService.record(StateEventEntityType.CASE, diagnosticCaseId, from.name(), to.name(), reason, actorUserId, clientRecordedAt);
 
         return diagnosticCase.getRowVersion();
     }
@@ -195,7 +260,9 @@ public class DiagnosticCaseService {
                     // The jsonb column comes back as text; turn it into a map for the response.
                     parseSnapshot(changeRow.getServiceAddressSnapshot()),
                     changeRow.getReportedSymptoms(),
-                    changeRow.getErrorCodes(),
+                    changeRow.getPrimarySymptom() == null ? null : PrimarySymptom.valueOf(changeRow.getPrimarySymptom()),
+                    jsonFieldSupport.read(changeRow.getSecondarySymptoms(), true),
+                    jsonFieldSupport.read(changeRow.getFailureTiming(), false),
                     changeRow.getWorkflowStatus() == null ? null : WorkflowStatus.valueOf(changeRow.getWorkflowStatus()),
                     changeRow.getDisposition() == null ? null : CaseDisposition.valueOf(changeRow.getDisposition()),
                     changeRow.getHoldReason(),
@@ -214,27 +281,6 @@ public class DiagnosticCaseService {
         return new SyncPullResponse(detailResponses, nextSince, nextSinceId, hasMore);
     }
 
-    /**
-     * The short form: user ids only, no lookup.
-     */
-    private DiagnosticCaseResponse toResponse(DiagnosticCase diagnosticCase) {
-        return new DiagnosticCaseResponse(
-                diagnosticCase.getDiagnosticCaseId(),
-                diagnosticCase.getCaseNo(),
-                diagnosticCase.getCustomerId(),
-                diagnosticCase.getServiceAddressId(),
-                diagnosticCase.getApplianceId(),
-                parseSnapshot(diagnosticCase.getServiceAddressSnapshot()),
-                diagnosticCase.getReportedSymptoms(),
-                diagnosticCase.getErrorCodes(),
-                diagnosticCase.getWorkflowStatus(),
-                diagnosticCase.getDisposition(),
-                diagnosticCase.getHoldReason(),
-                diagnosticCase.getRelatedCaseId(),
-                diagnosticCase.getOpenedAt(),
-                diagnosticCase.getClosedAt(),
-                diagnosticCase.getRowVersion());
-    }
 
     private Map<String, Object> parseSnapshot(String json) {
         if (json == null || json.isBlank()) {
@@ -252,16 +298,16 @@ public class DiagnosticCaseService {
         }
 
         Appliance appliance = applianceRepository.findById(applianceId).orElseThrow(() ->
-                new ApplicationException(ErrorCode.INVALID_PAYLOAD,"The appliance: " + applianceId + " does not exist."));
+                new ApplicationException(ErrorCode.INVALID_PAYLOAD, "The appliance: " + applianceId + " does not exist."));
         if (!appliance.getCustomerId().equals(customerId)) {
-            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,"The appliance does not belong to this customer.");
+            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "The appliance does not belong to this customer.");
         }
         ServiceAddress serviceAddress = serviceAddressRepository.findById(serviceAddressId).orElse(null);
         if (Objects.isNull(serviceAddress)) {
             throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "The service address: " + serviceAddressId + " does not exist.");
         }
 
-        if(!serviceAddress.getCustomerId().equals(customerId)){
+        if (!serviceAddress.getCustomerId().equals(customerId)) {
             throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "The service address: " + serviceAddress.getAddressLine1() + " is not the current customer's address");
         }
 

@@ -1,9 +1,8 @@
 package com.hugo.huds.sync.handler;
 
-import com.hugo.huds.appliance.service.ApplianceService;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
-import com.hugo.huds.diagnosticcase.service.CaseStateEventService;
+import com.hugo.huds.diagnosticcase.service.StateEventService;
 import com.hugo.huds.sync.dispatcher.SyncEntityType;
 import com.hugo.huds.sync.dto.SyncPullResponse;
 import com.hugo.huds.sync.dto.SyncPushMutationRequest;
@@ -18,15 +17,15 @@ import java.util.UUID;
  */
 @Component
 public class SyncCaseStateEventHandler implements SyncHandler {
-    private final CaseStateEventService caseStateEventService;
+    private final StateEventService stateEventService;
 
-    public SyncCaseStateEventHandler(CaseStateEventService caseStateEventService) {
-        this.caseStateEventService = caseStateEventService;
+    public SyncCaseStateEventHandler(StateEventService stateEventService) {
+        this.stateEventService = stateEventService;
     }
 
     @Override
     public SyncEntityType getSyncEntityType() {
-        return SyncEntityType.CASE_STATE_EVENT;
+        return SyncEntityType.STATE_EVENT;
     }
 
     @Override
@@ -38,6 +37,6 @@ public class SyncCaseStateEventHandler implements SyncHandler {
 
     @Override
     public SyncPullResponse pullHandle(Instant since, UUID sinceId, int limit) {
-        return caseStateEventService.fetchChanges(since, sinceId, limit);
+        return stateEventService.fetchChanges(since, sinceId, limit);
     }
 }

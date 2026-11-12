@@ -7,6 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -45,6 +46,34 @@ public class Appliance extends AuthoredAuditableEntity {
 
   @Column(name = "identity_notes")
   private String identityNotes;
+
+  /** The customer's own asset or product number for this appliance (optional). */
+  @Column(name = "customer_asset_ref")
+  private String customerAssetRef;
+
+  /** P.O. # on the form: the purchase order number of this appliance. */
+  @Column(name = "purchase_order_number")
+  private String purchaseOrderNumber;
+
+  /** MFG DATE on the form. Either this or {@link #estimatedAgeYears} is usually known. */
+  @Column(name = "production_date")
+  private LocalDate productionDate;
+
+  /** EST. AGE on the form, in years. */
+  @Column(name = "estimated_age_years")
+  private Integer estimatedAgeYears;
+
+  /** The schematic / tech sheet of this appliance, a row of {@code appliance_documents}. */
+  @Column(name = "schematic_document_id")
+  private UUID schematicDocumentId;
+
+  /** Where the schematic is found on the appliance (kickplate, console, back). */
+  @Column(name = "schematic_location")
+  private String schematicLocation;
+
+  /** The service manual of this appliance, a row of {@code appliance_documents}. */
+  @Column(name = "service_manual_document_id")
+  private UUID serviceManualDocumentId;
 
   @Column(name = "archived_at")
   @Setter(AccessLevel.NONE)

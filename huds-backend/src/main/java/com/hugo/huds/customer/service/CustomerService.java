@@ -12,6 +12,7 @@ import com.hugo.huds.common.response.PageResponse;
 import com.hugo.huds.customer.dto.CustomerDetailResponse;
 import com.hugo.huds.customer.dto.CustomerRequest;
 import com.hugo.huds.customer.dto.CustomerResponse;
+import com.hugo.huds.customer.dto.CustomerType;
 import com.hugo.huds.customer.entity.Customer;
 import com.hugo.huds.customer.repository.CustomerRepository;
 import com.hugo.huds.sync.dto.SyncPullResponse;
@@ -88,6 +89,8 @@ public class CustomerService {
         Customer customer = new Customer();
         BeanUtils.copyProperties(request, customer);
         customer.setCustomerId(customerId);
+        // The column is NOT NULL, so an empty type means the default one.
+        customer.setCustomerType(request.customerType() == null ? CustomerType.RETAIL_COD : request.customerType());
         // saveAndFlush so that the version and audit timestamps are populated before building the response.
         customerRepository.saveAndFlush(customer);
         auditService.recordInTransaction(AuditAction.CREATE, AUDIT_ENTITY_TYPE, customerId, Map.of());
@@ -122,11 +125,16 @@ public class CustomerService {
         // Compare before applying the change. Only the field names go to the audit trail.
         ChangedFields changedFields = new ChangedFields()
                 .track("customerName", customer.getCustomerName(), updateCustomerRequest.customerName())
+                .track("customerType", customer.getCustomerType(), updateCustomerRequest.customerType() == null ? customer.getCustomerType() : updateCustomerRequest.customerType())
                 .track("email", customer.getEmail(), updateCustomerRequest.email())
                 .track("phone", customer.getPhone(), updateCustomerRequest.phone())
                 .track("notes", customer.getNotes(), updateCustomerRequest.notes());
 
         customer.setCustomerName(updateCustomerRequest.customerName());
+        // An empty type means "unchanged".
+        if (updateCustomerRequest.customerType() != null) {
+            customer.setCustomerType(updateCustomerRequest.customerType());
+        }
         customer.setEmail(updateCustomerRequest.email());
         customer.setPhone(updateCustomerRequest.phone());
         customer.setNotes(updateCustomerRequest.notes());
@@ -197,6 +205,7 @@ public class CustomerService {
         List<CustomerDetailResponse> detailResponses = page.stream().map(changeRow -> {
             return new CustomerDetailResponse(changeRow.getCustomerId(),
                     changeRow.getCustomerName(),
+                    changeRow.getCustomerType() == null ? null : CustomerType.valueOf(changeRow.getCustomerType()),
                     changeRow.getEmail(),
                     changeRow.getPhone(),
                     changeRow.getNotes(),
@@ -228,6 +237,7 @@ public class CustomerService {
 
         return new CustomerDetailResponse(customerId,
                 customer.getCustomerName(),
+                customer.getCustomerType(),
                 customer.getEmail(),
                 customer.getPhone(),
                 customer.getNotes(),
@@ -276,8 +286,8 @@ public class CustomerService {
     }
 
     private CustomerResponse toResponse(Customer customer) {
-        return new CustomerResponse(customer.getCustomerId(), customer.getCustomerName(), customer.getEmail(),
-                customer.getPhone(), customer.getNotes(), customer.getRowVersion());
+        return new CustomerResponse(customer.getCustomerId(), customer.getCustomerName(), customer.getCustomerType(),
+                customer.getEmail(), customer.getPhone(), customer.getNotes(), customer.getRowVersion());
     }
 
 }

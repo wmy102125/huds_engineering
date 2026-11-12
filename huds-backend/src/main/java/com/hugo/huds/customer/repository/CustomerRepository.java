@@ -21,6 +21,8 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     interface ChangeRow {
         UUID getCustomerId();
         String getCustomerName();
+        // The text of the customer_type column; the service turns it into the enum.
+        String getCustomerType();
         String getEmail();
         String getPhone();
         String getNotes();
@@ -116,6 +118,7 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     @Query(value = """
             select c.customer_id as customerId,
                    c.customer_name as customerName,
+                   c.customer_type as customerType,
                    c.email as email,
                    c.phone as phone,
                    c.notes as notes,

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,5 +29,34 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Modifying(clearAutomatically = true,flushAutomatically = true)
     @Query("UPDATE User u SET u.failedLoginAttempts = 0 ,u.lockedUntil = null WHERE u.userId = :userId")
     int clearFailures(@Param("userId") UUID userId);
+
+
+    /** Pull: users changed after the cursor (updated_at, id), oldest first. Inactive users are included so the client can remove them. */
+    @Query(value = """
+            select u.user_id    as userId,
+                   u.user_name  as userName,
+                   u.role       as role,
+                   u.active     as active,
+                   u.updated_at as updatedAt
+              from users u
+             where (u.updated_at, u.user_id) > (:since, :sinceId)
+             order by u.updated_at, u.user_id
+             limit :limit
+            """, nativeQuery = true)
+    List<UserRow> findUserChanges(@Param("since") Instant since,
+                                  @Param("sinceId") UUID sinceId,
+                                  @Param("limit") int limit);
+
+    interface UserRow {
+        UUID getUserId();
+
+        String getUserName();
+
+        String getRole();
+
+        Boolean getActive();
+
+        Instant getUpdatedAt();
+    }
 }
 
