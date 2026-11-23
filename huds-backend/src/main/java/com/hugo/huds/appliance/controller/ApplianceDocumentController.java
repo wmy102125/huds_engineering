@@ -28,14 +28,13 @@ public class ApplianceDocumentController {
     /**
      * Registers a document by its type and reference number. The file is uploaded in a later step.
      */
-    @PostMapping
+    @PostMapping("/{applianceDocumentId}")
     @PreAuthorize("hasAuthority('" + RolePermissions.APPLIANCE_WRITE + "')")
-    public ResponseEntity<ApplianceDocumentResponse> register(@Valid @RequestBody ApplianceDocumentRequest request) {
-        ApplianceDocumentResponse response = applianceDocumentService.register(request);
-        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-                .path("/{applianceDocumentId}")
-                .buildAndExpand(response.applianceDocumentId())
-                .toUri();
+    public ResponseEntity<ApplianceDocumentResponse> register(
+            @PathVariable UUID applianceDocumentId,
+            @Valid @RequestBody ApplianceDocumentRequest request) {
+        ApplianceDocumentResponse response = applianceDocumentService.register(applianceDocumentId, request);
+        URI location = ServletUriComponentsBuilder.fromCurrentRequest().build().toUri();
         return ResponseEntity.created(location).body(response);
     }
 

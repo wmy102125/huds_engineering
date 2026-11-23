@@ -12,16 +12,17 @@ import com.hugo.huds.storage.ObjectStorageService;
 import com.hugo.huds.storage.PresignedDownload;
 import com.hugo.huds.storage.PresignedUpload;
 import com.hugo.huds.storage.StoredObject;
+import com.hugo.huds.sync.dto.SyncPullResponse;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.validation.annotation.Validated;
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
 
 import static com.hugo.huds.common.util.ParamNormalize.normalize;
 
@@ -50,8 +51,19 @@ public class ApplianceDocumentService {
     }
 
     @Transactional
-    public ApplianceDocumentResponse register(ApplianceDocumentRequest request) {
+    public ApplianceDocumentResponse register(@NotNull UUID applianceDocumentId, @Valid @NotNull ApplianceDocumentRequest request) {
         String documentRef = normalize(request.documentRef());
+        // The client chooses the id, so the same request can arrive twice: return the first result.
+        Optional<ApplianceDocument> existing = applianceDocumentRepository.findById(applianceDocumentId);
+        if (existing.isPresent()) {
+            ApplianceDocument record = existing.get();
+            boolean same = record.getDocumentType() == request.documentType()
+                    && record.getDocumentRef().equalsIgnoreCase(documentRef);
+            if (!same) {
+                throw ApplicationException.duplicate("A different document already uses this id.", applianceDocumentId);
+            }
+            return toResponse(record);
+        }
         // The same document is registered once; tell the client which one to use instead.
         Optional<UUID> duplicateId = applianceDocumentRepository.findDuplicateId(request.documentType(), documentRef);
         if (duplicateId.isPresent()) {
@@ -59,7 +71,7 @@ public class ApplianceDocumentService {
                     "A document with the same type and reference already exists.", duplicateId.get());
         }
         ApplianceDocument document = new ApplianceDocument();
-        document.setApplianceDocumentId(UUID.randomUUID());
+        document.setApplianceDocumentId(applianceDocumentId);
         document.setDocumentType(request.documentType());
         document.setDocumentRef(documentRef);
         // saveAndFlush so that row_version and the timestamps are filled before the response is built.
@@ -166,11 +178,39 @@ public class ApplianceDocumentService {
         return new ApplianceDocumentDownloadResponse(link.url(), link.expiresAt());
     }
 
+
+    /**
+     * Searches the change rows by since, sinceId and limit.
+     *
+     * @param since   the change rows start time
+     * @param sinceId the change rows start id
+     * @param limit   this search batch max size number
+     * @return matching rows
+     */
+    public SyncPullResponse fetchChanges(Instant since, UUID sinceId, int limit) {
+
+        List<ApplianceDocument> rows = applianceDocumentRepository.findChanges(since, sinceId, limit + 1);
+        // There is no change row, return default response
+        if (CollectionUtils.isEmpty(rows)) {
+            return SyncPullResponse.nullListResponse(since, sinceId);
+        }
+
+        boolean hasMore = rows.size() > limit;
+        List<ApplianceDocument> page = hasMore ? rows.subList(0, limit) : rows;
+
+        List<ApplianceDocumentResponse> detailResponses = page.stream().map(this::toResponse).toList();
+        ApplianceDocument last = page.get(page.size() - 1);
+        Instant nextSince = last.getUpdatedAt();
+        UUID nextSinceId = last.getApplianceDocumentId();
+        return new SyncPullResponse(detailResponses, nextSince, nextSinceId, hasMore);
+    }
+
     private ApplianceDocument findDocument(UUID applianceDocumentId) {
         return applianceDocumentRepository.findById(applianceDocumentId)
                 .orElseThrow(() -> new ApplicationException(ErrorCode.NOT_FOUND, "Document not found."));
     }
-        private ApplianceDocumentResponse toResponse(ApplianceDocument document) {
+
+    private ApplianceDocumentResponse toResponse(ApplianceDocument document) {
         return new ApplianceDocumentResponse(
                 document.getApplianceDocumentId(),
                 document.getDocumentType(),

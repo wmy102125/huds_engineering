@@ -11,10 +11,13 @@ import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
 import com.hugo.huds.common.util.JsonFieldSupport;
 import com.hugo.huds.customer.repository.CustomerRepository;
+import com.hugo.huds.diagnosticcase.casepart.service.CasePartService;
 import com.hugo.huds.diagnosticcase.dto.*;
 import com.hugo.huds.diagnosticcase.entity.DiagnosticCase;
 import com.hugo.huds.diagnosticcase.repository.DiagnosticCaseRepository;
 import com.hugo.huds.sync.dto.SyncPullResponse;
+import com.hugo.huds.visit.dto.VisitStatus;
+import com.hugo.huds.visit.repository.ServiceVisitRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -47,11 +50,14 @@ public class DiagnosticCaseService {
     private final ObjectMapper objectMapper;
     private final StateEventService stateEventService;
     private final JsonFieldSupport jsonFieldSupport;
+    private final CasePartService casePartService;
+    private final ServiceVisitRepository serviceVisitRepository;
+
 
     private static final TypeReference<Map<String, Object>> SNAPSHOT_TYPE = new TypeReference<>() {
     };
 
-    public DiagnosticCaseService(DiagnosticCaseRepository diagnosticCaseRepository, CustomerRepository customerRepository, ServiceAddressRepository serviceAddressRepository, ApplianceRepository applianceRepository, CaseNumberService caseNumberService, AddressSnapshotFactory addressSnapshotFactory, AuditService auditService, ObjectMapper objectMapper, StateEventService stateEventService, JsonFieldSupport jsonFieldSupport) {
+    public DiagnosticCaseService(DiagnosticCaseRepository diagnosticCaseRepository, CustomerRepository customerRepository, ServiceAddressRepository serviceAddressRepository, ApplianceRepository applianceRepository, CaseNumberService caseNumberService, AddressSnapshotFactory addressSnapshotFactory, AuditService auditService, ObjectMapper objectMapper, StateEventService stateEventService, JsonFieldSupport jsonFieldSupport, CasePartService casePartService, ServiceVisitRepository serviceVisitRepository) {
         this.diagnosticCaseRepository = diagnosticCaseRepository;
         this.customerRepository = customerRepository;
         this.serviceAddressRepository = serviceAddressRepository;
@@ -62,6 +68,8 @@ public class DiagnosticCaseService {
         this.objectMapper = objectMapper;
         this.stateEventService = stateEventService;
         this.jsonFieldSupport = jsonFieldSupport;
+        this.casePartService = casePartService;
+        this.serviceVisitRepository = serviceVisitRepository;
     }
 
     @Transactional
@@ -82,7 +90,7 @@ public class DiagnosticCaseService {
         Optional<UUID> unfinishedCaseId = diagnosticCaseRepository.findUnfinishedId(request.applianceId(), request.customerId(), finishedStatuses);
         unfinishedCaseId.ifPresent(existingId -> {
             throw new ApplicationException(ErrorCode.DUPLICATE_RESOURCE,
-                    "The appliance already has an unfinished case, existingId: "+ existingId);
+                    "The appliance already has an unfinished case, existingId: " + existingId);
         });
         DiagnosticCase diagnosticCase = new DiagnosticCase();
         diagnosticCase.setDiagnosticCaseId(diagnosticCaseId);
@@ -203,11 +211,23 @@ public class DiagnosticCaseService {
         }
 
         CaseStateMachine.validate(from, to, reason, request.disposition(), statusBeforeHold);
-
+        // The repair cannot start while a part is still on its way.
+        if (from == WorkflowStatus.PENDING_PARTS && to == WorkflowStatus.IN_REPAIR
+                && casePartService.hasWaitingParts(diagnosticCaseId)) {
+            throw new ApplicationException(ErrorCode.DOMAIN_RULE_VIOLATION,
+                    "Some parts of this case have not arrived yet.");
+        }
         // Validation passed: now it is safe to change the entity.
         if (from == WorkflowStatus.ON_HOLD) {
             diagnosticCase.setHoldReason(null);
         }
+
+        // While a visit is going on, the case moves only through the visit (start, pause, complete), never by hand.
+        boolean existsProcessingVisit = serviceVisitRepository.existsByDiagnosticCaseIdAndVisitStatusIn(diagnosticCaseId, Set.of(VisitStatus.IN_PROGRESS, VisitStatus.PAUSED));
+        if (existsProcessingVisit) {
+            throw new ApplicationException(ErrorCode.DOMAIN_RULE_VIOLATION, "A visit is going on. The case moves on when all the visits completed.");
+        }
+
         diagnosticCase.setWorkflowStatus(to);
 
         switch (to) {

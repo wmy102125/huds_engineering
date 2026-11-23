@@ -85,4 +85,5 @@ public interface VisitCompletionRecordRepository extends JpaRepository<VisitComp
     List<ChangeRow> findChanges(@Param("since") Instant since,
                                 @Param("sinceId") UUID sinceId,
                                 @Param("limit") int limit);
+
 }

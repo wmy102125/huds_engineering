@@ -18,10 +18,11 @@ public class RolePermissions {
     public static final String CUSTOMER_WRITE = "CUSTOMER_WRITE";
     public static final String VISIT_WRITE = "VISIT_WRITE";
     public static final String VISIT_ASSIGN = "VISIT_ASSIGN";
+    public static final String ATTACHMENT_WRITE = "ATTACHMENT_WRITE";
     private static final Map<String, List<String>> BY_ROLE = Map.of(
-            "ADMIN", List.of(CASE_READ_ALL, USER_MANAGE, AUDIT_READ, APPLIANCE_WRITE, CUSTOMER_WRITE, CASE_WRITE,VISIT_WRITE, VISIT_ASSIGN),
-            "TECHNICIAN", List.of(CASE_READ_OWN, APPLIANCE_WRITE, CASE_WRITE,VISIT_WRITE),
-            "REVIEWER", List.of(CASE_READ_ALL, CASE_REVIEW, AUDIT_READ)
+            "ADMIN", List.of(CASE_READ_ALL, USER_MANAGE, AUDIT_READ, APPLIANCE_WRITE, CUSTOMER_WRITE, CASE_WRITE, VISIT_WRITE, VISIT_ASSIGN,ATTACHMENT_WRITE),
+            "TECHNICIAN", List.of(CASE_READ_OWN, APPLIANCE_WRITE, CASE_WRITE, VISIT_WRITE,ATTACHMENT_WRITE),
+            "REVIEWER", List.of(CASE_READ_ALL, CASE_REVIEW, AUDIT_READ,ATTACHMENT_WRITE)
     );
 
     public RolePermissions() {

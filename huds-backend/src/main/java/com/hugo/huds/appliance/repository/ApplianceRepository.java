@@ -40,12 +40,6 @@ public interface ApplianceRepository extends JpaRepository<Appliance, UUID> {
 
         Integer getEstimatedAgeYears();
 
-        UUID getSchematicDocumentId();
-
-        String getSchematicLocation();
-
-        UUID getServiceManualDocumentId();
-
         Long getRowVersion();
 
         Instant getCreatedAt();
@@ -175,9 +169,6 @@ public interface ApplianceRepository extends JpaRepository<Appliance, UUID> {
                    a.purchase_order_number as purchaseOrderNumber,
                    cast(a.production_date as text) as productionDate,
                    a.estimated_age_years as estimatedAgeYears,
-                   a.schematic_document_id as schematicDocumentId,
-                   a.schematic_location as schematicLocation,
-                   a.service_manual_document_id as serviceManualDocumentId,
                    a.row_version as rowVersion,
                    a.created_at as createdAt,
                    a.created_by as createdBy,

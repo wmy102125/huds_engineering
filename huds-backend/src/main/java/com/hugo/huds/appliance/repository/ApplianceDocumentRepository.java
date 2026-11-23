@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.awt.print.Pageable;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,4 +48,15 @@ public interface ApplianceDocumentRepository extends JpaRepository<ApplianceDocu
      * @return the matching document, or empty if no document uses this key
      */
     Optional<ApplianceDocument> findByObjectKey(String objectKey);
+
+    @Query("""
+        select d from ApplianceDocument d
+        where d.updatedAt > :since
+           or (d.updatedAt = :since and d.applianceDocumentId > :afterId)
+        order by d.updatedAt asc, d.applianceDocumentId asc
+        limit :limit
+        """)
+    List<ApplianceDocument> findChanges(@Param("since") Instant since,
+                                        @Param("afterId") UUID afterId,
+                                        @Param("limit") int limit);
 }

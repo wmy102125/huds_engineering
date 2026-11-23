@@ -26,12 +26,11 @@ class CaseStateMachineTest {
     private static final Map<WorkflowStatus, Set<WorkflowStatus>> EXPECTED = new EnumMap<>(WorkflowStatus.class);
 
     static {
-        EXPECTED.put(OPEN, EnumSet.of(DIAGNOSING, ON_HOLD, CANCELLED));
+        EXPECTED.put(OPEN, EnumSet.of(ON_HOLD, CANCELLED, CLOSED));
         EXPECTED.put(DIAGNOSING, EnumSet.of(PENDING_AUTHORIZATION, PENDING_PARTS, ON_HOLD, CANCELLED, CLOSED));
-        EXPECTED.put(PENDING_AUTHORIZATION, EnumSet.of(IN_REPAIR, PENDING_PARTS, DIAGNOSING, ON_HOLD, CANCELLED, CLOSED));
+        EXPECTED.put(PENDING_AUTHORIZATION, EnumSet.of(IN_REPAIR, PENDING_PARTS, ON_HOLD, CANCELLED, CLOSED));
         EXPECTED.put(PENDING_PARTS, EnumSet.of(IN_REPAIR, ON_HOLD, CANCELLED, CLOSED));
-        EXPECTED.put(IN_REPAIR, EnumSet.of(VERIFYING, PENDING_PARTS, DIAGNOSING, ON_HOLD, CLOSED));
-        EXPECTED.put(VERIFYING, EnumSet.of(DIAGNOSING, PENDING_PARTS, ON_HOLD, CLOSED));
+        EXPECTED.put(IN_REPAIR, EnumSet.of(ON_HOLD, CLOSED));
         EXPECTED.put(ON_HOLD, EnumSet.of(CANCELLED, CLOSED));
         EXPECTED.put(CLOSED, EnumSet.noneOf(WorkflowStatus.class));
         EXPECTED.put(CANCELLED, EnumSet.noneOf(WorkflowStatus.class));
@@ -47,7 +46,7 @@ class CaseStateMachineTest {
     }
 
     @Test
-    void validateAgreesWithTheMatrixForAllEightyOnePairs() {
+    void validateAgreesWithTheMatrixForAllSixtyFourPairs() {
         for (WorkflowStatus from : WorkflowStatus.values()) {
             for (WorkflowStatus to : WorkflowStatus.values()) {
                 boolean shouldPass = EXPECTED.get(from).contains(to);
@@ -82,23 +81,23 @@ class CaseStateMachineTest {
 
     @Test
     void goingBackPausingAndCancellingNeedAReason() {
-        assertInvalidPayload(() -> CaseStateMachine.validate(IN_REPAIR, DIAGNOSING, null, null, null));
-        assertInvalidPayload(() -> CaseStateMachine.validate(IN_REPAIR, DIAGNOSING, "  ", null, null));
+        assertInvalidPayload(() -> CaseStateMachine.validate(IN_REPAIR, ON_HOLD, null, null, null));
+        assertInvalidPayload(() -> CaseStateMachine.validate(IN_REPAIR, ON_HOLD, "  ", null, null));
         assertInvalidPayload(() -> CaseStateMachine.validate(OPEN, ON_HOLD, null, null, null));
         assertInvalidPayload(() -> CaseStateMachine.validate(OPEN, CANCELLED, null, null, null));
         // A step forward does not.
-        assertThatCode(() -> CaseStateMachine.validate(OPEN, DIAGNOSING, null, null, null)).doesNotThrowAnyException();
+        assertThatCode(() -> CaseStateMachine.validate(DIAGNOSING, PENDING_PARTS, null, null, null)).doesNotThrowAnyException();
     }
 
     @Test
     void closingNeedsADispositionThatIsNotCancelled() {
-        assertInvalidPayload(() -> CaseStateMachine.validate(VERIFYING, CLOSED, null, null, null));
-        assertInvalidPayload(() -> CaseStateMachine.validate(VERIFYING, CLOSED, null, CaseDisposition.CANCELLED, null));
+        assertInvalidPayload(() -> CaseStateMachine.validate(IN_REPAIR, CLOSED, null, null, null));
+        assertInvalidPayload(() -> CaseStateMachine.validate(IN_REPAIR, CLOSED, null, CaseDisposition.CANCELLED, null));
     }
 
     @Test
-    void fixedAndVerifiedIsOnlyPossibleFromVerifying() {
-        assertThatCode(() -> CaseStateMachine.validate(VERIFYING, CLOSED, null, CaseDisposition.FIXED_VERIFIED, null))
+    void fixedAndVerifiedIsOnlyPossibleFromInRepair() {
+        assertThatCode(() -> CaseStateMachine.validate(IN_REPAIR, CLOSED, null, CaseDisposition.FIXED_VERIFIED, null))
                 .doesNotThrowAnyException();
         assertInvalidPayload(() -> CaseStateMachine.validate(DIAGNOSING, CLOSED, null, CaseDisposition.FIXED_VERIFIED, null));
         assertInvalidPayload(() -> CaseStateMachine.validate(ON_HOLD, CLOSED, null, CaseDisposition.FIXED_VERIFIED, ON_HOLD));
@@ -108,13 +107,20 @@ class CaseStateMachineTest {
 
     @Test
     void aDispositionIsRefusedOnAnyStepThatDoesNotClose() {
-        assertInvalidPayload(() -> CaseStateMachine.validate(OPEN, DIAGNOSING, null, CaseDisposition.UNRESOLVED, null));
+        assertInvalidPayload(() -> CaseStateMachine.validate(DIAGNOSING, PENDING_PARTS, null, CaseDisposition.UNRESOLVED, null));
     }
 
     @Test
     void aStartedRepairCannotBeCancelled() {
         assertInvalidTransition(() -> CaseStateMachine.validate(IN_REPAIR, CANCELLED, "x", null, null));
-        assertInvalidTransition(() -> CaseStateMachine.validate(VERIFYING, CANCELLED, "x", null, null));
+    }
+
+    @Test
+    void openCanBeClosedButNotStartedByHand() {
+        assertThatCode(() -> CaseStateMachine.validate(OPEN, CLOSED, null, CaseDisposition.UNRESOLVED, null))
+                .doesNotThrowAnyException();
+        // The first visit moves an open case to diagnosing.
+        assertInvalidTransition(() -> CaseStateMachine.validate(OPEN, DIAGNOSING, null, null, null));
     }
 
     @Test

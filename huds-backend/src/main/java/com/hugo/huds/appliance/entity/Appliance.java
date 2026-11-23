@@ -63,18 +63,6 @@ public class Appliance extends AuthoredAuditableEntity {
   @Column(name = "estimated_age_years")
   private Integer estimatedAgeYears;
 
-  /** The schematic / tech sheet of this appliance, a row of {@code appliance_documents}. */
-  @Column(name = "schematic_document_id")
-  private UUID schematicDocumentId;
-
-  /** Where the schematic is found on the appliance (kickplate, console, back). */
-  @Column(name = "schematic_location")
-  private String schematicLocation;
-
-  /** The service manual of this appliance, a row of {@code appliance_documents}. */
-  @Column(name = "service_manual_document_id")
-  private UUID serviceManualDocumentId;
-
   @Column(name = "archived_at")
   @Setter(AccessLevel.NONE)
   private Instant archivedAt;

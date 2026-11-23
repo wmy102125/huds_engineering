@@ -18,9 +18,6 @@ public record ApplianceResponse(
         String purchaseOrderNumber,
         LocalDate productionDate,
         Integer estimatedAgeYears,
-        UUID schematicDocumentId,
-        String schematicLocation,
-        UUID serviceManualDocumentId,
         Long rowVersion
 ) {
 }

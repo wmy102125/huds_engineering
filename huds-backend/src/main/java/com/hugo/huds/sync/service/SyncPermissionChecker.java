@@ -38,6 +38,9 @@ public class SyncPermissionChecker {
         requiredAuthority.put(SyncEntityType.CASE_SUMMARY, RolePermissions.CASE_WRITE);
         requiredAuthority.put(SyncEntityType.CASE_INVOICE, RolePermissions.CASE_WRITE);
         requiredAuthority.put(SyncEntityType.CASE_INVOICE_PAYMENT, RolePermissions.CASE_WRITE);
+        requiredAuthority.put(SyncEntityType.APPLIANCE_DOCUMENT, RolePermissions.APPLIANCE_WRITE);
+        requiredAuthority.put(SyncEntityType.ATTACHMENT, RolePermissions.ATTACHMENT_WRITE);
+        requiredAuthority.put(SyncEntityType.CASE_PART, RolePermissions.CASE_WRITE);
         // Fail at startup, not at request time, if a new entity type has no permission yet.
         for (SyncEntityType type : SyncEntityType.values()) {
             if (!requiredAuthority.containsKey(type)) {

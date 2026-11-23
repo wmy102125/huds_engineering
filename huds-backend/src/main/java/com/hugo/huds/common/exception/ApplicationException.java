@@ -10,21 +10,31 @@ public class ApplicationException extends RuntimeException {
     private final ErrorCode errorCode;
     private final boolean retryable;
     private final Long currentVersion;
-    /** The id of the existing record that caused a DUPLICATE_RESOURCE error, otherwise null. */
+    /**
+     * The id of the existing record that caused a DUPLICATE_RESOURCE error, otherwise null.
+     */
     private UUID conflictingResourceId;
-    /**The id of the unfound record that caused a NOT_FOUND error, otherwise null.**/
+    /**
+     * The id of the unfound record that caused a NOT_FOUND error, otherwise null.
+     **/
     private UUID targetId;
 
-    public ApplicationException(ErrorCode errorCode,String message ) {
-        this(errorCode, message, false, null);
+    public ApplicationException(ErrorCode errorCode, String message) {
+        this(errorCode, message, false, null, null);
     }
 
-    public ApplicationException(ErrorCode errorCode,String message,boolean retryable, Long currentVersion) {
+    public ApplicationException(ErrorCode errorCode, String message, boolean retryable, Long currentVersion) {
+        this(errorCode, message, retryable, currentVersion, null);
+    }
+
+    public ApplicationException(ErrorCode errorCode, String message, boolean retryable, Long currentVersion, UUID targetId) {
         super(message);
         this.errorCode = errorCode;
         this.retryable = retryable;
         this.currentVersion = currentVersion;
+        this.targetId = targetId;
     }
+
     /**
      * Creates a duplicate-resource error that tells the client which existing record to use instead.
      *
@@ -38,7 +48,7 @@ public class ApplicationException extends RuntimeException {
         return exception;
     }
 
-    public static ApplicationException notFound(String message,UUID targetId){
+    public static ApplicationException notFound(String message, UUID targetId) {
         ApplicationException exception = new ApplicationException(ErrorCode.NOT_FOUND, message);
         exception.targetId = targetId;
         return exception;
@@ -47,6 +57,7 @@ public class ApplicationException extends RuntimeException {
     public UUID getConflictingResourceId() {
         return conflictingResourceId;
     }
+
     public ErrorCode getErrorCode() {
         return errorCode;
     }

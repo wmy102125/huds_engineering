@@ -21,6 +21,9 @@ public interface ServiceVisitRepository extends JpaRepository<ServiceVisit, UUID
     /** True if the case has a visit that was not cancelled. Used to tell the first visit from a later one. */
     boolean existsByDiagnosticCaseIdAndVisitStatusNot(UUID diagnosticCaseId, VisitStatus visitStatus);
 
+    boolean existsByDiagnosticCaseIdAndVisitStatusIn(UUID diagnosticCaseId, Set<VisitStatus> visitStatuses);
+
+
     Optional<ServiceVisit> findFirstByDiagnosticCaseIdAndVisitStatusIn(UUID diagnosticCaseId, Set<VisitStatus> visitStatuses);
 
     @Query(value = """
@@ -103,4 +106,6 @@ public interface ServiceVisitRepository extends JpaRepository<ServiceVisit, UUID
                     ? null : new UserBriefResponse(getUpdatedBy(), getUpdatedByName());
         }
     }
+
+    boolean existsByDiagnosticCaseIdAndTechnicianIdAndVisitStatus(UUID diagnosticCaseId, UUID technicianId, VisitStatus visitStatus);
 }

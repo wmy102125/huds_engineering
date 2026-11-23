@@ -5,6 +5,7 @@ import com.hugo.huds.audit.service.AuditService;
 import com.hugo.huds.audit.service.ChangedFields;
 import com.hugo.huds.common.error.ErrorCode;
 import com.hugo.huds.common.exception.ApplicationException;
+import com.hugo.huds.diagnosticcase.casepart.service.CasePartService;
 import com.hugo.huds.diagnosticcase.dto.CaseStateMachine;
 import com.hugo.huds.diagnosticcase.dto.StateEventEntityType;
 import com.hugo.huds.diagnosticcase.dto.WorkflowStatus;
@@ -12,6 +13,9 @@ import com.hugo.huds.diagnosticcase.entity.DiagnosticCase;
 import com.hugo.huds.diagnosticcase.repository.DiagnosticCaseRepository;
 import com.hugo.huds.diagnosticcase.service.StateEventService;
 import com.hugo.huds.sync.dto.SyncPullResponse;
+import com.hugo.huds.visit.completion.dto.FinalStatus;
+import com.hugo.huds.visit.completion.entity.VisitCompletionRecord;
+import com.hugo.huds.visit.completion.repository.VisitCompletionRecordRepository;
 import com.hugo.huds.visit.dto.*;
 import com.hugo.huds.visit.entity.ServiceVisit;
 import com.hugo.huds.visit.repository.ServiceVisitRepository;
@@ -51,9 +55,15 @@ public class ServiceVisitService {
             EnumSet.of(VisitStatus.PLANNED, VisitStatus.IN_PROGRESS, VisitStatus.PAUSED);
     /**
      * A visit may only be started while the case is in one of these statuses.
+     * Starting it moves OPEN to DIAGNOSING and PENDING_PARTS (all parts arrived) to IN_REPAIR.
      */
     private static final Set<WorkflowStatus> STARTABLE_CASE_STATUSES =
-            EnumSet.of(WorkflowStatus.OPEN, WorkflowStatus.DIAGNOSING, WorkflowStatus.IN_REPAIR);
+            EnumSet.of(WorkflowStatus.OPEN, WorkflowStatus.DIAGNOSING, WorkflowStatus.IN_REPAIR, WorkflowStatus.PENDING_PARTS);
+    /**
+     * A visit that moves the case on (see applyFinalStatus) can only be completed while the case is in one of these statuses.
+     */
+    private static final Set<WorkflowStatus> COMPLETABLE_CASE_STATUSES =
+            EnumSet.of(WorkflowStatus.DIAGNOSING, WorkflowStatus.IN_REPAIR);
 
 
     private final ServiceVisitRepository serviceVisitRepository;
@@ -61,18 +71,25 @@ public class ServiceVisitService {
     private final AuditService auditService;
     private final StateEventService stateEventService;
     private final VisitSafetyCheckRepository visitSafetyCheckRepository;
+    private final CasePartService casePartService;
+    private final VisitCompletionRecordRepository visitCompletionRecordRepository;
 
-    public ServiceVisitService(ServiceVisitRepository serviceVisitRepository, DiagnosticCaseRepository diagnosticCaseRepository, AuditService auditService, StateEventService stateEventService, VisitSafetyCheckRepository visitSafetyCheckRepository) {
+    public ServiceVisitService(ServiceVisitRepository serviceVisitRepository, DiagnosticCaseRepository diagnosticCaseRepository, AuditService auditService, StateEventService stateEventService, VisitSafetyCheckRepository visitSafetyCheckRepository, CasePartService casePartService, VisitCompletionRecordRepository visitCompletionRecordRepository) {
         this.serviceVisitRepository = serviceVisitRepository;
         this.diagnosticCaseRepository = diagnosticCaseRepository;
         this.auditService = auditService;
         this.stateEventService = stateEventService;
         this.visitSafetyCheckRepository = visitSafetyCheckRepository;
+        this.casePartService = casePartService;
+        this.visitCompletionRecordRepository = visitCompletionRecordRepository;
     }
 
     @Transactional
     public Long add(@NotNull UUID actorUserId, @NotNull UUID serviceVisitId, @NotNull Instant clientRecordedAt, ServiceVisitRequest request) {
-        requireAssignPermission();
+        // An administrator plans any visit; a technician may only plan a follow-up visit for himself or herself.
+        if (!hasAuthority(VISIT_ASSIGN)) {
+            requireTechnicianFollowUp(actorUserId, request);
+        }
         Optional<ServiceVisit> visitOptional = serviceVisitRepository.findById(serviceVisitId);
         if (visitOptional.isPresent()) {
             return visitOptional.get().getRowVersion();
@@ -87,7 +104,7 @@ public class ServiceVisitService {
             return new ApplicationException(ErrorCode.NOT_FOUND, "The diagnostic case does not exist.");
         });
         // A finished case cannot get a new visit.
-        if (WorkflowStatus.finishedStatuses().contains(diagnosticCase.getWorkflowStatus())) {
+        if (WorkflowStatus.finishedStatuses().contains(diagnosticCase.getWorkflowStatus()) || WorkflowStatus.ON_HOLD == diagnosticCase.getWorkflowStatus()) {
             throw new ApplicationException(ErrorCode.DOMAIN_RULE_VIOLATION,
                     "The case is " + diagnosticCase.getWorkflowStatus() + ", a visit cannot be planned.");
         }
@@ -190,6 +207,7 @@ public class ServiceVisitService {
         // Validation
         VisitStateMachine.validate(from, to, reason, statusBeforeHold);
         // 4. Side effects of this step.
+        FinalStatus finalStatus = null;
         DiagnosticCase diagnosticCase = diagnosticCaseRepository.findById(serviceVisit.getDiagnosticCaseId()).orElseThrow(() ->
                 new ApplicationException(ErrorCode.NOT_FOUND, "The diagnostic case does not exist."));
 
@@ -200,6 +218,10 @@ public class ServiceVisitService {
         // A visit cannot be completed before its safety checks are recorded.
         if (to == VisitStatus.COMPLETED) {
             requireSafetyChecks(serviceVisitId);
+            // The final status of the completion record says what the visit achieved.
+            finalStatus = requireFinalStatus(serviceVisitId);
+            // The case moves on in the same transaction as the completion.
+            applyFinalStatus(actorUserId, diagnosticCase, finalStatus, clientRecordedAt);
         }
         serviceVisit.setVisitStatus(to);
         if (to == VisitStatus.COMPLETED || to == VisitStatus.CANCELLED) {
@@ -208,7 +230,9 @@ public class ServiceVisitService {
         serviceVisitRepository.flush();
 
         // 5. Write the history entry in the same transaction. The pause reason lives here.
-        stateEventService.record(StateEventEntityType.VISIT, serviceVisitId, from.name(), to.name(), reason, actorUserId, clientRecordedAt);
+        // The history of a completed visit also says what it achieved.
+        String eventReason = finalStatus == null ? reason : "Final status: " + finalStatus.name() + (reason == null ? "" : ". " + reason);
+        stateEventService.record(StateEventEntityType.VISIT, serviceVisitId, from.name(), to.name(), eventReason, actorUserId, clientRecordedAt);
         auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, serviceVisitId,
                 Map.of("from", from.name(), "to", to.name()));
         return serviceVisit.getRowVersion();
@@ -256,17 +280,18 @@ public class ServiceVisitService {
 
     /**
      * The technician starts the visit (PLANNED -> IN_PROGRESS): the case must allow a visit, the start time is set,
-     * and an OPEN case moves to DIAGNOSING in the same transaction.
+     * and the case moves on in the same transaction: OPEN to DIAGNOSING, PENDING_PARTS to IN_REPAIR.
      */
     private void startVisit(UUID actorUserId, ServiceVisit serviceVisit, DiagnosticCase diagnosticCase, Instant clientRecordedAt) {
         requireStartableCase(diagnosticCase);
         serviceVisit.setStartedAt(clientRecordedAt);
-        if (diagnosticCase.getWorkflowStatus() == WorkflowStatus.OPEN) {
-            CaseStateMachine.validate(WorkflowStatus.OPEN, WorkflowStatus.DIAGNOSING, null, null, null);
-            diagnosticCase.setWorkflowStatus(WorkflowStatus.DIAGNOSING);
-            diagnosticCaseRepository.flush();
-            stateEventService.record(StateEventEntityType.CASE, diagnosticCase.getDiagnosticCaseId(),
-                    WorkflowStatus.OPEN.name(), WorkflowStatus.DIAGNOSING.name(), null, actorUserId, clientRecordedAt);
+        WorkflowStatus current = diagnosticCase.getWorkflowStatus();
+        if (current == WorkflowStatus.OPEN) {
+            // There is no manual step for this one: the first visit starts the diagnosis.
+            moveCase(actorUserId, diagnosticCase, WorkflowStatus.DIAGNOSING, "Visit started", clientRecordedAt);
+        } else if (current == WorkflowStatus.PENDING_PARTS) {
+            CaseStateMachine.validate(WorkflowStatus.PENDING_PARTS, WorkflowStatus.IN_REPAIR, null, null, null);
+            moveCase(actorUserId, diagnosticCase, WorkflowStatus.IN_REPAIR, "Visit started, all parts have arrived", clientRecordedAt);
         }
     }
 
@@ -276,6 +301,64 @@ public class ServiceVisitService {
             throw new ApplicationException(ErrorCode.DOMAIN_RULE_VIOLATION,
                     "The case is " + caseStatus + ", a visit cannot be started.");
         }
+        // The repair cannot start while a part is still on its way.
+        if (caseStatus == WorkflowStatus.PENDING_PARTS && casePartService.hasWaitingParts(diagnosticCase.getDiagnosticCaseId())) {
+            throw new ApplicationException(ErrorCode.DOMAIN_RULE_VIOLATION,
+                    "Some parts of this case have not arrived yet, the visit cannot be started.");
+        }
+    }
+
+    /**
+     * The completion record has to exist and carry a final status before a visit can be completed.
+     */
+    private FinalStatus requireFinalStatus(UUID serviceVisitId) {
+        return visitCompletionRecordRepository.findByServiceVisitId(serviceVisitId)
+                .map(VisitCompletionRecord::getFinalStatus)
+                .orElseThrow(() -> new ApplicationException(ErrorCode.DOMAIN_RULE_VIOLATION,
+                        "Choose the final status in the completion record of this visit first."));
+    }
+
+    /**
+     * The final status of the visit decides the next state of the case:
+     * <ul>
+     *   <li>QUOTE_PENDING_APPROVAL: PENDING_AUTHORIZATION</li>
+     *   <li>PARTS_REQUIRED: PENDING_PARTS</li>
+     *   <li>OPERATING_NORMALLY, FURTHER_TESTING: IN_REPAIR (an administrator closes the case as fixed and verified)</li>
+     *   <li>NO_FAULT_FOUND, REPAIR_DECLINED, NOT_REPAIRABLE: the case is left alone (an administrator closes it with a reason)</li>
+     * </ul>
+     * A visit that finds something new while the case is IN_REPAIR (another quote, another part) may send it back to a waiting state.
+     */
+    private void applyFinalStatus(UUID actorUserId, DiagnosticCase diagnosticCase, FinalStatus finalStatus, Instant clientRecordedAt) {
+        WorkflowStatus target = switch (finalStatus) {
+            case QUOTE_PENDING_APPROVAL -> WorkflowStatus.PENDING_AUTHORIZATION;
+            case PARTS_REQUIRED -> WorkflowStatus.PENDING_PARTS;
+            case OPERATING_NORMALLY, FURTHER_TESTING -> WorkflowStatus.IN_REPAIR;
+            case NO_FAULT_FOUND, REPAIR_DECLINED, NOT_REPAIRABLE -> null;
+        };
+        if (target == null) {
+            return;
+        }
+        WorkflowStatus current = diagnosticCase.getWorkflowStatus();
+        if (!COMPLETABLE_CASE_STATUSES.contains(current)) {
+            throw new ApplicationException(ErrorCode.DOMAIN_RULE_VIOLATION,
+                    "The case is " + current + ", the visit cannot be completed with the final status " + finalStatus + ".");
+        }
+        moveCase(actorUserId, diagnosticCase, target, "Visit completed: " + finalStatus.name(), clientRecordedAt);
+    }
+
+    /**
+     * Moves the case to another state as a consequence of a visit and writes the history entry in the same transaction.
+     * Does nothing when the case is already in that state.
+     */
+    private void moveCase(UUID actorUserId, DiagnosticCase diagnosticCase, WorkflowStatus to, String reason, Instant clientRecordedAt) {
+        WorkflowStatus from = diagnosticCase.getWorkflowStatus();
+        if (from == to) {
+            return;
+        }
+        diagnosticCase.setWorkflowStatus(to);
+        diagnosticCaseRepository.flush();
+        stateEventService.record(StateEventEntityType.CASE, diagnosticCase.getDiagnosticCaseId(),
+                from.name(), to.name(), reason, actorUserId, clientRecordedAt);
     }
 
     /**
@@ -306,7 +389,25 @@ public class ServiceVisitService {
         return request.visitKind();
     }
 
-    // Plans a visit: only users with VISIT_ASSIGN (admins) may do it.
+    /**
+     * A technician (a user without VISIT_ASSIGN) may plan a visit only as a follow-up for himself or herself,
+     * and only on a case where he or she has completed a visit already.
+     */
+    private void requireTechnicianFollowUp(UUID actorUserId, ServiceVisitRequest request) {
+        if (!Objects.equals(request.technicianId(), actorUserId)) {
+            throw new ApplicationException(ErrorCode.FORBIDDEN, "You can only plan a visit for yourself.");
+        }
+        if (request.visitKind() != null && request.visitKind() != VisitKind.FOLLOW_UP) {
+            throw new ApplicationException(ErrorCode.FORBIDDEN, "You can only plan a follow-up visit.");
+        }
+        if (!serviceVisitRepository.existsByDiagnosticCaseIdAndTechnicianIdAndVisitStatus(
+                request.diagnosticCaseId(), actorUserId, VisitStatus.COMPLETED)) {
+            throw new ApplicationException(ErrorCode.FORBIDDEN,
+                    "You can plan the next visit after you have completed a visit of this case.");
+        }
+    }
+
+    // Changes or cancels a planned visit: only users with VISIT_ASSIGN (admins) may do it.
     private void requireAssignPermission() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         boolean allowed = authentication != null &&

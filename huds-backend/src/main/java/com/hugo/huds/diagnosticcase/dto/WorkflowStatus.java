@@ -14,7 +14,6 @@ public enum WorkflowStatus {
     PENDING_AUTHORIZATION,
     PENDING_PARTS,
     IN_REPAIR,
-    VERIFYING,
     ON_HOLD,
     CLOSED,
     CANCELLED;

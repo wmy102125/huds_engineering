@@ -1,7 +1,9 @@
 package com.hugo.huds.appliance.service;
 
 import com.hugo.huds.appliance.dto.*;
+import com.hugo.huds.appliance.entity.ApplianceDocument;
 import com.hugo.huds.appliance.entity.ApplianceModel;
+import com.hugo.huds.appliance.repository.ApplianceDocumentRepository;
 import com.hugo.huds.appliance.repository.ApplianceModelRepository;
 import com.hugo.huds.appliance.repository.ApplianceRepository;
 import com.hugo.huds.audit.dto.AuditAction;
@@ -27,6 +29,7 @@ import org.springframework.validation.annotation.Validated;
 import java.time.Instant;
 import java.util.*;
 
+import static com.hugo.huds.common.util.ParamNormalize.blankToNull;
 import static com.hugo.huds.common.util.ParamNormalize.normalize;
 
 /**
@@ -43,14 +46,16 @@ public class ApplianceModelService {
     private final ApplianceRepository applianceRepository;
     private final AuditService auditService;
     private final UserService userService;
+    private final ApplianceDocumentRepository applianceDocumentRepository;
     // Do not use the SyncEntityType.APPLIANCE_MODEL, It will lead to circular dependencies.
     private static final String AUDIT_ENTITY_TYPE = "APPLIANCE_MODEL";
 
-    public ApplianceModelService(ApplianceModelRepository applianceModelRepository, ApplianceRepository applianceRepository, AuditService auditService, UserService userService) {
+    public ApplianceModelService(ApplianceModelRepository applianceModelRepository, ApplianceRepository applianceRepository, AuditService auditService, UserService userService, ApplianceDocumentRepository applianceDocumentRepository) {
         this.applianceModelRepository = applianceModelRepository;
         this.applianceRepository = applianceRepository;
         this.auditService = auditService;
         this.userService = userService;
+        this.applianceDocumentRepository = applianceDocumentRepository;
     }
 
     /**
@@ -79,12 +84,17 @@ public class ApplianceModelService {
                     existsApplianceModelIdOptional.get());
         }
 
+        checkDocuments(modelRequest);
+
         // add a new appliance model
         ApplianceModel applianceModel = new ApplianceModel();
         applianceModel.setApplianceType(modelRequest.applianceType());
         applianceModel.setBrand(brand);
         applianceModel.setModelNo(modelNo);
         applianceModel.setApplianceModelId(applianceModelId);
+        applianceModel.setServiceManualDocumentId(modelRequest.serviceManualDocumentId());
+        applianceModel.setSchematicLocation(blankToNull(modelRequest.schematicLocation()));
+        applianceModel.setSchematicDocumentId(modelRequest.schematicDocumentId());
         // saveAndFlush so that the row_version and update_at timestamp are populated before building the response.
         applianceModelRepository.saveAndFlush(applianceModel);
         auditService.recordInTransaction(AuditAction.CREATE, AUDIT_ENTITY_TYPE, applianceModelId, Map.of());
@@ -115,16 +125,23 @@ public class ApplianceModelService {
                     duplicateId.get());
         }
 
+        checkDocuments(modelRequest);
 
         // Compare before applying the change. Only the field names go to audit trail.
         ChangedFields changes = new ChangedFields()
                 .track("applianceType", applianceModel.getApplianceType(), modelRequest.applianceType())
                 .track("brand", applianceModel.getBrand(), brand)
-                .track("modelNo", applianceModel.getModelNo(), modelNo);
+                .track("modelNo", applianceModel.getModelNo(), modelNo)
+                .track("schematicDocumentId", applianceModel.getSchematicDocumentId(), modelRequest.schematicDocumentId())
+                .track("schematicLocation", applianceModel.getSchematicLocation(), blankToNull(modelRequest.schematicLocation()))
+                .track("serviceManualDocumentId", applianceModel.getServiceManualDocumentId(), modelRequest.serviceManualDocumentId());
 
         applianceModel.setApplianceType(modelRequest.applianceType());
         applianceModel.setBrand(brand);
         applianceModel.setModelNo(modelNo);
+        applianceModel.setSchematicDocumentId(modelRequest.schematicDocumentId());
+        applianceModel.setSchematicLocation(blankToNull(modelRequest.schematicLocation()));
+        applianceModel.setServiceManualDocumentId(modelRequest.serviceManualDocumentId());
         // Flush so that the row_version and update_at timestamp are new when the response is built.
         applianceModelRepository.flush();
         auditService.recordInTransaction(AuditAction.UPDATE, AUDIT_ENTITY_TYPE, applianceModelId, Map.of("changedFields", changes.names()));
@@ -216,6 +233,9 @@ public class ApplianceModelService {
                 row.getApplianceType(),
                 row.getBrand(),
                 row.getModelNo(),
+                row.getSchematicDocumentId(),
+                row.getSchematicLocation(),
+                row.getServiceManualDocumentId(),
                 row.getRowVersion(),
                 row.getCreatedAt(),
                 row.getUpdatedAt(),
@@ -261,15 +281,12 @@ public class ApplianceModelService {
                             appliance.getPurchaseOrderNumber(),
                             appliance.getProductionDate(),
                             appliance.getEstimatedAgeYears(),
-                            appliance.getSchematicDocumentId(),
-                            appliance.getSchematicLocation(),
-                            appliance.getServiceManualDocumentId(),
                             appliance.getRowVersion());
                 }).toList();
 
 
         return new ApplianceModelDetailResponse(applianceModelId, applianceModel.getApplianceType(), applianceModel.getBrand(),
-                applianceModel.getModelNo(), applianceModel.getRowVersion(), applianceModel.getCreatedAt(), applianceModel.getUpdatedAt(),
+                applianceModel.getModelNo(), applianceModel.getSchematicDocumentId(), applianceModel.getSchematicLocation(), applianceModel.getServiceManualDocumentId(), applianceModel.getRowVersion(), applianceModel.getCreatedAt(), applianceModel.getUpdatedAt(),
                 userBriefResponseMap.get(applianceModel.getCreatedBy()), userBriefResponseMap.get(applianceModel.getUpdatedBy()), applianceModel.getArchivedAt() != null);
     }
 
@@ -287,8 +304,29 @@ public class ApplianceModelService {
     }
 
 
+    /**
+     * The schematic and the service manual must be registered documents of the right kind;
+     * otherwise the database would refuse the row with a foreign key error.
+     */
+    private void checkDocuments(ApplianceModelRequest request) {
+        requireDocument(request.schematicDocumentId(), ApplianceDocumentType.SCHEMATIC, "schematic");
+        requireDocument(request.serviceManualDocumentId(), ApplianceDocumentType.SERVICE_MANUAL, "service manual");
+    }
+
+    private void requireDocument(UUID documentId, ApplianceDocumentType expectedType, String label) {
+        if (documentId == null) {
+            return;
+        }
+        ApplianceDocument document = applianceDocumentRepository.findById(documentId).orElseThrow(() ->
+                new ApplicationException(ErrorCode.INVALID_PAYLOAD, "The " + label + " document: " + documentId + " does not exist."));
+        if (document.getDocumentType() != expectedType) {
+            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD,
+                    "The document: " + documentId + " is not a " + label + ".");
+        }
+    }
+
     private ApplianceModelResponse toResponse(ApplianceModel model) {
         return new ApplianceModelResponse(model.getApplianceModelId(), model.getApplianceType(),
-                model.getBrand(), model.getModelNo(), model.getRowVersion());
+                model.getBrand(), model.getModelNo(), model.getSchematicDocumentId(), model.getSchematicLocation(), model.getServiceManualDocumentId(), model.getRowVersion());
     }
 }

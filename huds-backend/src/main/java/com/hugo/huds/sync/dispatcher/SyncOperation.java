@@ -14,6 +14,7 @@ public enum SyncOperation {
     UPDATE,
     ARCHIVE,
     TRANSITION,
+    REGISTER,
 
    ;
 }

@@ -15,12 +15,16 @@ import static com.hugo.huds.diagnosticcase.dto.WorkflowStatus.*;
  * The only place that knows which case state may follow which (see section 3 of the case module spec).
  * It reads and writes nothing: the service loads the case, calls {@link #validate}, then saves.
  *
+ * <p>The visits move a case on by themselves (starting a visit: OPEN to DIAGNOSING and PENDING_PARTS to IN_REPAIR;
+ * completing a visit: the outcome decides). Those moves are made by the visit service and are not part of this table.
+ * The table holds the steps an administrator takes by hand.
+ *
  * <p>Two things are not in the static table and are checked in code:
  * <ul>
  *   <li>Resuming: a case on hold may only go back to the state it was in before it was put on hold.
  *       The service reads that state from the history and passes it in.</li>
  *   <li>Closing: the disposition must be present, must not be CANCELLED, and FIXED_VERIFIED is only
- *       possible straight after VERIFYING.</li>
+ *       possible when the case is IN_REPAIR.</li>
  * </ul>
  */
 public final class CaseStateMachine {
@@ -32,10 +36,11 @@ public final class CaseStateMachine {
     private static final Map<WorkflowStatus, List<Transition>> TABLE = new EnumMap<>(WorkflowStatus.class);
 
     static {
+        // OPEN becomes DIAGNOSING when the first visit starts, so there is no manual step for it.
         TABLE.put(OPEN, List.of(
-                go(DIAGNOSING),
                 why(ON_HOLD),
-                why(CANCELLED)));
+                why(CANCELLED),
+                go(CLOSED)));
         TABLE.put(DIAGNOSING, List.of(
                 go(PENDING_AUTHORIZATION),
                 go(PENDING_PARTS),
@@ -45,7 +50,6 @@ public final class CaseStateMachine {
         TABLE.put(PENDING_AUTHORIZATION, List.of(
                 go(IN_REPAIR),
                 go(PENDING_PARTS),
-                why(DIAGNOSING),
                 why(ON_HOLD),
                 why(CANCELLED),
                 go(CLOSED)));
@@ -56,14 +60,6 @@ public final class CaseStateMachine {
                 go(CLOSED)));
         // Once the repair has started the case can no longer be cancelled, only closed.
         TABLE.put(IN_REPAIR, List.of(
-                go(VERIFYING),
-                why(PENDING_PARTS),
-                why(DIAGNOSING),
-                why(ON_HOLD),
-                go(CLOSED)));
-        TABLE.put(VERIFYING, List.of(
-                why(DIAGNOSING),
-                why(PENDING_PARTS),
                 why(ON_HOLD),
                 go(CLOSED)));
         // Resuming from ON_HOLD is not listed here: the target depends on the history.
@@ -156,8 +152,8 @@ public final class CaseStateMachine {
         if (disposition == CaseDisposition.CANCELLED) {
             throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "A case is cancelled by cancelling it, not by closing it.");
         }
-        if (disposition == CaseDisposition.FIXED_VERIFIED && from != VERIFYING) {
-            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "FIXED_VERIFIED is only possible after verifying the repair.");
+        if (disposition == CaseDisposition.FIXED_VERIFIED && from != IN_REPAIR) {
+            throw new ApplicationException(ErrorCode.INVALID_PAYLOAD, "FIXED_VERIFIED is only possible after the repair has started.");
         }
     }
 

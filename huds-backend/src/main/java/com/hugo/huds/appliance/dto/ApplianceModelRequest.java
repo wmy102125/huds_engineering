@@ -13,5 +13,8 @@ public record ApplianceModelRequest(
         @NotBlank(message = "Appliance type is required")
         String applianceType,
         String brand,
-        String modelNo) {
+        String modelNo,
+        UUID schematicDocumentId,
+        String schematicLocation,
+        UUID serviceManualDocumentId) {
 }

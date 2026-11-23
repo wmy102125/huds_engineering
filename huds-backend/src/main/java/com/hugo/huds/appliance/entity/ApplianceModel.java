@@ -40,6 +40,18 @@ public class ApplianceModel extends AuthoredAuditableEntity {
   @Column(name = "model_no")
   private String modelNo;
 
+  /** The schematic / tech sheet of this model, a row of {@code appliance_documents}. Every appliance of the model uses it. */
+  @Column(name = "schematic_document_id")
+  private UUID schematicDocumentId;
+
+  /** Where the schematic is found on the appliance (kickplate, console, back). The same for every unit of the model. */
+  @Column(name = "schematic_location")
+  private String schematicLocation;
+
+  /** The service manual of this model, a row of {@code appliance_documents}. */
+  @Column(name = "service_manual_document_id")
+  private UUID serviceManualDocumentId;
+
   @Column(name = "archived_at")
   @Setter(AccessLevel.NONE)
   private Instant archivedAt;

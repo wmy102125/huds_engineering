@@ -104,24 +104,6 @@ CREATE UNIQUE INDEX ux_service_addresses_one_default
 -- Incremental pull: ordered by (updated_at, id).
 CREATE INDEX idx_service_addresses_changes ON service_addresses (updated_at, service_address_id);
 
-CREATE TABLE appliance_models (
-                                  appliance_model_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                                  appliance_type text NOT NULL,
-                                  brand text,
-                                  model_no text,
-                                  created_at timestamptz NOT NULL DEFAULT now(),
-                                  updated_at timestamptz NOT NULL DEFAULT now(),
-                                  created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                                  updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                                  archived_at timestamptz,
-                                  row_version bigint NOT NULL DEFAULT 0
-);
-CREATE UNIQUE INDEX ux_appliance_models_identity
-    ON appliance_models (lower(appliance_type), coalesce(lower(brand), ''), coalesce(lower(model_no), ''))
-    WHERE archived_at IS NULL;
--- Incremental pull: ordered by (updated_at, id).
-CREATE INDEX idx_appliance_models_changes ON appliance_models (updated_at, appliance_model_id);
-
 -- Manuals and schematics. One row per document, reused by many appliance models.
 -- The row can exist before the file does: the reference number is registered first and the file is uploaded later.
 -- The file itself is in object storage.
@@ -161,6 +143,30 @@ CREATE UNIQUE INDEX uq_appliance_documents_type_ref ON appliance_documents (docu
 CREATE INDEX idx_appliance_documents_changes ON appliance_documents (updated_at, appliance_document_id);
 
 
+CREATE TABLE appliance_models (
+                                  appliance_model_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                  appliance_type text NOT NULL,
+                                  brand text,
+                                  model_no text,
+    -- SCHEMATIC / TECH SHEET and SERVICE MANUAL references.
+                                  schematic_document_id      uuid REFERENCES appliance_documents(appliance_document_id) ON DELETE RESTRICT,
+                                  schematic_location         text,
+                                  service_manual_document_id uuid REFERENCES appliance_documents(appliance_document_id) ON DELETE RESTRICT,
+
+                                  created_at timestamptz NOT NULL DEFAULT now(),
+                                  updated_at timestamptz NOT NULL DEFAULT now(),
+                                  created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                  updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                                  archived_at timestamptz,
+                                  row_version bigint NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX ux_appliance_models_identity
+    ON appliance_models (lower(appliance_type), coalesce(lower(brand), ''), coalesce(lower(model_no), ''))
+    WHERE archived_at IS NULL;
+-- Incremental pull: ordered by (updated_at, id).
+CREATE INDEX idx_appliance_models_changes ON appliance_models (updated_at, appliance_model_id);
+
+
 CREATE TABLE appliances (
                             appliance_id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     -- The owner. Fixed when the appliance is created; one appliance belongs to one customer.
@@ -178,10 +184,6 @@ CREATE TABLE appliances (
                             production_date        date,
                             estimated_age_years    integer CHECK (estimated_age_years >= 0),
 
-    -- SCHEMATIC / TECH SHEET and SERVICE MANUAL references.
-                            schematic_document_id      uuid REFERENCES appliance_documents(appliance_document_id) ON DELETE RESTRICT,
-                            schematic_location         text,
-                            service_manual_document_id uuid REFERENCES appliance_documents(appliance_document_id) ON DELETE RESTRICT,
 
                             created_at timestamptz NOT NULL DEFAULT now(),
                             updated_at timestamptz NOT NULL DEFAULT now(),
@@ -228,7 +230,7 @@ CREATE TABLE diagnostic_cases (
                                   failure_timing jsonb NOT NULL DEFAULT '{}'::jsonb
                     CHECK (jsonb_typeof(failure_timing) = 'object' AND length(failure_timing::text) <= 20000),
 
-                                  workflow_status text NOT NULL DEFAULT 'OPEN' CHECK (workflow_status IN ('OPEN', 'DIAGNOSING', 'PENDING_AUTHORIZATION', 'PENDING_PARTS', 'IN_REPAIR', 'VERIFYING', 'ON_HOLD', 'CLOSED', 'CANCELLED')),
+                                  workflow_status text NOT NULL DEFAULT 'OPEN' CHECK (workflow_status IN ('OPEN', 'DIAGNOSING', 'PENDING_AUTHORIZATION', 'PENDING_PARTS', 'IN_REPAIR', 'ON_HOLD', 'CLOSED', 'CANCELLED')),
                                   disposition text CHECK (disposition IN ('FIXED_VERIFIED', 'UNRESOLVED', 'CUSTOMER_DECLINED', 'BER', 'UNSAFE', 'NO_FAULT_FOUND', 'REFERRED', 'CANCELLED')),
                                   hold_reason text,
                                   related_case_id uuid REFERENCES diagnostic_cases(diagnostic_case_id) ON DELETE RESTRICT,
@@ -426,31 +428,44 @@ CREATE TABLE visit_repair_records (
 -- Incremental pull: ordered by (updated_at, id).
 CREATE INDEX idx_visit_repair_records_changes ON visit_repair_records (updated_at, visit_repair_record_id);
 
--- PARTS REQUIRED / INSTALLED: one row per part of that visit's repair.
-CREATE TABLE visit_repair_parts (
-                                    visit_repair_part_id   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-                                    visit_repair_record_id uuid NOT NULL REFERENCES visit_repair_records(visit_repair_record_id) ON DELETE RESTRICT,
-                                    part_name              text NOT NULL,
-                                    oem_part_no            text,
-                                    quantity               numeric(12,3) NOT NULL DEFAULT 1 CHECK (quantity > 0),
-                                    unit                   text,
 
-    -- SUPPLY STATUS of this part.
-                                    parts_supply_status    text NOT NULL
-                                        CHECK (parts_supply_status IN ('IN_STOCK', 'ORDERED', 'BACKORDER', 'CUSTOMER_SUPPLIED')),
+-- PARTS OF A CASE: the parts a repair needs, from the moment the case waits for them until they are used.
+-- Replaces visit_repair_parts (which hung on a visit repair record and was never used by the code).
+CREATE TABLE case_parts (
+                            case_part_id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                            diagnostic_case_id  uuid NOT NULL REFERENCES diagnostic_cases(diagnostic_case_id) ON DELETE RESTRICT,
+                            part_name           text NOT NULL,
+                            oem_part_no         text,
+                            quantity            numeric(12,3) NOT NULL DEFAULT 1 CHECK (quantity > 0),
+                            unit                text,
+                            supplier            text,
 
-                                    created_at timestamptz NOT NULL DEFAULT now(),
-                                    updated_at timestamptz NOT NULL DEFAULT now(),
-                                    created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                                    updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
-                                    row_version bigint NOT NULL DEFAULT 0,
+    -- SUPPLY STATUS of this part. ARRIVED: ordered or on backorder, and now in hand.
+                            parts_supply_status text NOT NULL
+                                CHECK (parts_supply_status IN ('IN_STOCK', 'ORDERED', 'BACKORDER', 'CUSTOMER_SUPPLIED', 'ARRIVED')),
+                            ordered_on          date,
+                            expected_arrival_on date,
+                            arrived_on          date,
 
-                                    CONSTRAINT ck_visit_repair_parts_name CHECK (length(trim(part_name)) > 0)
+    -- WARRANTY of the part after it is installed, in months. Empty or 0 = no warranty.
+                            warranty_months     integer CHECK (warranty_months >= 0),
+
+    -- The visit in which the part was installed. Empty until the part is used.
+                            installed_visit_id  uuid REFERENCES service_visits(service_visit_id) ON DELETE RESTRICT,
+
+                            created_at timestamptz NOT NULL DEFAULT now(),
+                            updated_at timestamptz NOT NULL DEFAULT now(),
+                            created_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                            updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+                            row_version bigint NOT NULL DEFAULT 0,
+    -- A part entered by mistake is archived, never deleted (the sync has to tell the other devices).
+                            archived_at timestamptz,
+
+                            CONSTRAINT ck_case_parts_name CHECK (length(trim(part_name)) > 0)
 );
-CREATE INDEX idx_visit_repair_parts_record ON visit_repair_parts (visit_repair_record_id);
+CREATE INDEX idx_case_parts_case ON case_parts (diagnostic_case_id);
 -- Incremental pull: ordered by (updated_at, id).
-CREATE INDEX idx_visit_repair_parts_changes ON visit_repair_parts (updated_at, visit_repair_part_id);
-
+CREATE INDEX idx_case_parts_changes ON case_parts (updated_at, case_part_id);
 
 
 -- Section 5 of the form: one row per visit, written by the technician when the visit is finished.
@@ -593,22 +608,23 @@ CREATE TABLE evidence_amendments (
 );
 CREATE INDEX idx_evidence_amendments_target ON evidence_amendments(target_table, target_id, amended_at DESC);
 
--- Metadata of the photos, videos, audio, documents and signatures. The files themselves are in object storage.
-CREATE TABLE diagnostic_media (
-                                  diagnostic_media_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+CREATE TABLE attachments (
+                             attachment_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- What the file is about.
     -- No foreign key because it points at different tables, so the application checks it (same as state_events).
-                                  entity_type         text NOT NULL CHECK (entity_type IN ('CASE', 'APPLIANCE', 'SERVICE_VISIT', 'DIAGNOSTIC_STEP')),
-                                  entity_id           uuid NOT NULL,
+                             entity_type         text NOT NULL CHECK (entity_type IN ('CASE', 'APPLIANCE', 'SERVICE_VISIT', 'DIAGNOSTIC_STEP')),
+                             entity_id           uuid NOT NULL,
 
-                                  media_kind          text NOT NULL CHECK (media_kind IN ('PHOTO', 'VIDEO', 'AUDIO', 'DOCUMENT', 'SIGNATURE')),
-                                  object_key          text NOT NULL UNIQUE,
+                             media_kind          text NOT NULL CHECK (media_kind IN ('PHOTO', 'VIDEO', 'AUDIO', 'DOCUMENT', 'SIGNATURE')),
+                             object_key          text NOT NULL UNIQUE,
     -- Small preview of a photo or video, downloaded to the device ahead of time for offline use.
-                                  thumbnail_object_key text,
-                                  mime_type           text NOT NULL,
-                                  byte_size           bigint NOT NULL CHECK (byte_size >= 0),
-                                  sha256_hex          text NOT NULL CHECK (sha256_hex ~ '^[0-9a-f]{64}$'),
+                             thumbnail_object_key text,
+    -- Original file name, used as the download name.
+                             file_name           text NOT NULL,
+                             mime_type           text NOT NULL,
+                             byte_size           bigint NOT NULL CHECK (byte_size >= 0),
+                             sha256_hex          text NOT NULL CHECK (sha256_hex ~ '^[0-9a-f]{64}$'),
     upload_status       text NOT NULL DEFAULT 'PENDING'
                         CHECK (upload_status IN ('PENDING', 'UPLOADING', 'UPLOADED', 'VERIFIED', 'FAILED')),
     captured_at         timestamptz,
@@ -620,11 +636,14 @@ CREATE TABLE diagnostic_media (
     updated_by uuid NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
     row_version bigint NOT NULL DEFAULT 0
 );
--- All files of one case, visit, step or appliance.
-CREATE INDEX idx_media_entity ON diagnostic_media (entity_type, entity_id);
--- Incremental pull: ordered by (updated_at, id).
-CREATE INDEX idx_diagnostic_media_changes ON diagnostic_media (updated_at, diagnostic_media_id);
 
+-- List all files of one case, visit, etc.
+CREATE INDEX idx_attachments_entity
+    ON attachments (entity_type, entity_id);
+
+-- Pull changes for sync.
+CREATE INDEX idx_attachments_changes
+    ON attachments (updated_at, attachment_id);
 
 CREATE TABLE sync_mutations (
                                 sync_mutation_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

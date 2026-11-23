@@ -11,5 +11,8 @@ public record ApplianceModelResponse(
         String applianceType,
         String brand,
         String modelNo,
+        UUID schematicDocumentId,
+        String schematicLocation,
+        UUID serviceManualDocumentId,
         Long rowVersion) {
 }

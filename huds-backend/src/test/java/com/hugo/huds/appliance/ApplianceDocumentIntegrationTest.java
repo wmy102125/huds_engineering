@@ -46,7 +46,7 @@ public class ApplianceDocumentIntegrationTest  extends AbstractIntegrationTest {
     void registerCreatesADocumentWithoutAFile() throws Exception {
         String ref = "REF-" + UUID.randomUUID();
 
-        MvcResult result = mockMvc.perform(authed(post(DOCUMENTS))
+        MvcResult result = mockMvc.perform(authed(post(DOCUMENTS+"/"+UUID.randomUUID()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(request(ref))))
                 .andExpect(status().isCreated())
@@ -63,31 +63,61 @@ public class ApplianceDocumentIntegrationTest  extends AbstractIntegrationTest {
     }
 
     @Test
-    void registeringTheSameDocumentTwiceReturns409() throws Exception {
+    void registeringTheSameDocumentWithTheSameIdIsSafe() throws Exception {
         String ref = "REF-" + UUID.randomUUID();
-        mockMvc.perform(authed(post(DOCUMENTS)).contentType(MediaType.APPLICATION_JSON).content(json(request(ref))))
+        UUID documentId = UUID.randomUUID();
+
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(authed(post(DOCUMENTS + "/" + documentId))
+                            .contentType(MediaType.APPLICATION_JSON).content(json(request(ref))))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.applianceDocumentId").value(documentId.toString()));
+        }
+
+        Long rows = jdbc.queryForObject(
+                "select count(*) from appliance_documents where appliance_document_id = ?", Long.class, documentId);
+        assertEquals(1, rows);
+    }
+
+    @Test
+    void anotherIdWithTheSameTypeAndReferenceReturns409() throws Exception {
+        String ref = "REF-" + UUID.randomUUID();
+        mockMvc.perform(authed(post(DOCUMENTS + "/" + UUID.randomUUID()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(request(ref))))
                 .andExpect(status().isCreated());
 
         // The reference is compared without regard to case, so a different spelling is the same document.
-        mockMvc.perform(authed(post(DOCUMENTS)).contentType(MediaType.APPLICATION_JSON)
-                        .content(json(request(ref.toLowerCase()))))
+        mockMvc.perform(authed(post(DOCUMENTS + "/" + UUID.randomUUID()))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(request(ref.toLowerCase()))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE_RESOURCE"));
     }
 
     @Test
+    void sameIdWithAnotherReferenceReturns409() throws Exception {
+        UUID documentId = UUID.randomUUID();
+        mockMvc.perform(authed(post(DOCUMENTS + "/" + documentId))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(request("REF-" + UUID.randomUUID()))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(authed(post(DOCUMENTS + "/" + documentId))
+                        .contentType(MediaType.APPLICATION_JSON).content(json(request("REF-" + UUID.randomUUID()))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DUPLICATE_RESOURCE"));
+    }
+    @Test
     void blankReferenceReturns400() throws Exception {
-        mockMvc.perform(authed(post(DOCUMENTS)).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(authed(post(DOCUMENTS + "/" + UUID.randomUUID())).contentType(MediaType.APPLICATION_JSON)
                         .content(json(request("   "))))
                 .andExpect(status().isBadRequest());
     }
 
     private UUID registerDocument() throws Exception {
-        MvcResult result = mockMvc.perform(authed(post(DOCUMENTS)).contentType(MediaType.APPLICATION_JSON)
-                        .content(json( Map.of( "documentType", "SERVICE_MANUAL", "documentRef", "REF-" + UUID.randomUUID(),"mimeType","application/pdf"))))
-                .andExpect(status().isCreated())
-                .andReturn();
-        return UUID.fromString(jsonOf(result).get("applianceDocumentId").asText());
+        UUID documentId = UUID.randomUUID();
+        mockMvc.perform(authed(post(DOCUMENTS + "/" + documentId)).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request("REF-" + UUID.randomUUID()))))
+                .andExpect(status().isCreated());
+        return documentId;
     }
 
     private Map<String, Object> uploadRequest(String mimeType, long byteSize) {

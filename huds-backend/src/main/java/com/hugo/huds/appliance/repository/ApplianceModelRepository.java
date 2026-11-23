@@ -15,31 +15,55 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ApplianceModelRepository extends JpaRepository<ApplianceModel, UUID> {
-    /** One row of the change feed. Archived models are included on purpose. */
+    /**
+     * One row of the change feed. Archived models are included on purpose.
+     */
     interface ChangeRow {
         UUID getApplianceModelId();
+
         String getApplianceType();
+
         String getBrand();
+
         String getModelNo();
+
+        UUID getSchematicDocumentId();
+
+        String getSchematicLocation();
+
+        UUID getServiceManualDocumentId();
+
         Long getRowVersion();
+
         Instant getCreatedAt();
+
         UUID getCreatedBy();
+
         String getCreatedByName();
+
         Instant getUpdatedAt();
+
         UUID getUpdatedBy();
+
         String getUpdatedByName();
+
         Boolean getArchived();
 
-        /** The creator as one object, or null when the row has no creator. */
+        /**
+         * The creator as one object, or null when the row has no creator.
+         */
         default UserBriefResponse getCreator() {
             return getCreatedBy() == null ? null : new UserBriefResponse(getCreatedBy(), getCreatedByName());
         }
 
-        /** The last editor as one object, or null when the row has no editor. */
+        /**
+         * The last editor as one object, or null when the row has no editor.
+         */
         default UserBriefResponse getEditor() {
             return getUpdatedBy() == null ? null : new UserBriefResponse(getUpdatedBy(), getUpdatedByName());
         }
     }
+
     /**
      * Finds an appliance model with its applianceType, brand and modelNo
      *
@@ -51,17 +75,18 @@ public interface ApplianceModelRepository extends JpaRepository<ApplianceModel, 
     Optional<ApplianceModel> findByApplianceTypeAndBrandAndModelNo(String applianceType,
                                                                    String brand,
                                                                    String modelNo);
+
     /**
      * Finds the id of the active model with the same type, brand and model number (case-insensitive).
      *
      * @return the id of the existing model, or empty if there is none
      */
     @Query("""
-        select m.applianceModelId from ApplianceModel m
-        where lower(m.applianceType) = lower(:applianceType)
-          and coalesce(lower(m.brand), '') = lower(:brand)
-          and coalesce(lower(m.modelNo), '') = lower(:modelNo)
-        """)
+            select m.applianceModelId from ApplianceModel m
+            where lower(m.applianceType) = lower(:applianceType)
+              and coalesce(lower(m.brand), '') = lower(:brand)
+              and coalesce(lower(m.modelNo), '') = lower(:modelNo)
+            """)
     Optional<UUID> findDuplicateId(@Param("applianceType") String applianceType,
                                    @Param("brand") String brand,
                                    @Param("modelNo") String modelNo);
@@ -72,16 +97,17 @@ public interface ApplianceModelRepository extends JpaRepository<ApplianceModel, 
      * @return the id of another model with the same identity, or empty if there is none
      */
     @Query("""
-        select m.applianceModelId from ApplianceModel m
-        where lower(m.applianceType) = lower(:applianceType)
-          and coalesce(lower(m.brand), '') = lower(:brand)
-          and coalesce(lower(m.modelNo), '') = lower(:modelNo)
-          and m.applianceModelId <> :excludeId
-        """)
+            select m.applianceModelId from ApplianceModel m
+            where lower(m.applianceType) = lower(:applianceType)
+              and coalesce(lower(m.brand), '') = lower(:brand)
+              and coalesce(lower(m.modelNo), '') = lower(:modelNo)
+              and m.applianceModelId <> :excludeId
+            """)
     Optional<UUID> findDuplicateIdExcluding(@Param("applianceType") String applianceType,
                                             @Param("brand") String brand,
                                             @Param("modelNo") String modelNo,
                                             @Param("excludeId") UUID excludeId);
+
     /**
      * Whether an active model with the same applianceType, brand and modelNo already exists.
      * Matches the unique index: case-insensitive, and a missing brand or model number equals an empty one.
@@ -161,6 +187,7 @@ public interface ApplianceModelRepository extends JpaRepository<ApplianceModel, 
                                           @Param("brand") String brand,
                                           @Param("modelNo") String modelNo,
                                           Sort sort);
+
     /**
      * Models changed after the cursor (updated_at, appliance_model_id), oldest first.
      * Native SQL is needed because @SQLRestriction would hide archived rows from JPQL.
@@ -171,6 +198,9 @@ public interface ApplianceModelRepository extends JpaRepository<ApplianceModel, 
                    m.brand as brand,
                    m.model_no as modelNo,
                    m.row_version as rowVersion,
+                   m.schematic_document_id as schematicDocumentId,
+                   m.schematic_location as schematicLocation,
+                   m.service_manual_document_id as serviceManualDocumentId,
                    m.created_at as createdAt,
                    m.created_by as createdBy,
                    cu.user_name as createdByName,
