@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Pager, PAGE_SIZE } from '../../components/Pager'
+import { customerTypeLabel } from './customerLabels'
 import { SyncBadge } from '../../components/SyncBadge'
 import { useLocalQuery } from '../../db/useLocalQuery'
 import type { SyncStatus } from '../../sync/useSyncEngine'
@@ -53,6 +54,7 @@ export function CustomersPage({ sync }: Props) {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Type</th>
               <th>Phone</th>
               <th>Email</th>
               <th>Status</th>
@@ -61,7 +63,7 @@ export function CustomersPage({ sync }: Props) {
           <tbody>
             {data !== undefined && shown.length === 0 && (
               <tr>
-                <td colSpan={4} className="muted">
+                <td colSpan={5} className="muted">
                   {customers.length === 0 ? 'No customers yet.' : 'No customer matches the search.'}
                 </td>
               </tr>
@@ -73,6 +75,7 @@ export function CustomersPage({ sync }: Props) {
                     <strong>{customer.customerName}</strong>
                   </a>
                 </td>
+                <td data-label="Type">{customerTypeLabel(customer.customerType)}</td>
                 <td data-label="Phone">{customer.phone}</td>
                 <td data-label="Email">{customer.email}</td>
                 <td data-label="Status">

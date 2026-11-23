@@ -6,10 +6,14 @@ import { closeDatabase, openDatabase } from './db/db'
 import { ApplianceDetailPage } from './features/appliances/ApplianceDetailPage'
 import { ModelDetailPage } from './features/appliances/ModelDetailPage'
 import { ModelsPage } from './features/appliances/ModelsPage'
+import { CaseDetailPage } from './features/cases/CaseDetailPage'
+import { CasesPage } from './features/cases/CasesPage'
+import { NewCasePage } from './features/cases/NewCasePage'
 import { LoginPage } from './features/auth/LoginPage'
 import { CustomerDetailPage } from './features/customers/CustomerDetailPage'
 import { CustomersPage } from './features/customers/CustomersPage'
-import { ComingSoonPage } from './features/my/ComingSoonPage'
+import { MyVisitsPage } from './features/visits/MyVisitsPage'
+import { VisitDetailPage } from './features/visits/VisitDetailPage'
 import { MyLayout } from './features/my/MyLayout'
 import { HomePage } from './features/public/HomePage'
 import { Redirect, redirect, useRoute } from './routes/useRoute'
@@ -126,7 +130,15 @@ function SignedIn({ user, route, onLoggedOut }: SignedInProps) {
       page = <ModelsPage sync={sync} />
     }
   } else if (parts[1] === 'cases') {
-    page = <ComingSoonPage title="Cases" note="Cases are not built on the server yet." />
+    if (parts[2] === 'new') {
+      page = <NewCasePage key={`${parts[3] ?? ''}-${parts[4] ?? ''}`} sync={sync} initialCustomerId={parts[3]} initialApplianceId={parts[4]} />
+    } else if (parts[2]) {
+      page = <CaseDetailPage key={parts[2]} diagnosticCaseId={parts[2]} user={user} sync={sync} />
+    } else {
+      page = <CasesPage sync={sync} />
+    }
+  } else if (parts[1] === 'visits') {
+    page = parts[2] ? <VisitDetailPage key={parts[2]} serviceVisitId={parts[2]} user={user} sync={sync} /> : <MyVisitsPage user={user} sync={sync} />
   } else if (parts[1] === 'customers' && parts[2]) {
     page = <CustomerDetailPage key={parts[2]} customerId={parts[2]} sync={sync} />
   } else {

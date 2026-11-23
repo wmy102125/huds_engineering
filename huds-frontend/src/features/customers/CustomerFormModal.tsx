@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import type { SubmitEventHandler } from 'react'
-import type { CustomerPayload } from '../../api/types'
+import type { CustomerPayload, CustomerType } from '../../api/types'
 import type { LocalCustomer } from '../../db/db'
 import { Modal } from '../my/Modal'
+import { CUSTOMER_TYPE_LABELS, CUSTOMER_TYPES } from './customerLabels'
 import { createCustomer, updateCustomer } from './customerStore'
 
 interface Props {
   /** The customer to edit, or nothing to create a new one. */
   customer?: LocalCustomer
   onClose: () => void
-  onSaved: () => void
+  /** Gets the id of the customer when a new one was created. */
+  onSaved: (customerId?: string) => void
 }
 
 export function CustomerFormModal({ customer, onClose, onSaved }: Props) {
   const [form, setForm] = useState<CustomerPayload>({
     customerName: customer?.customerName ?? '',
+    customerType: customer?.customerType ?? 'RETAIL_COD',
     email: customer?.email ?? '',
     phone: customer?.phone ?? '',
     notes: customer?.notes ?? '',
@@ -26,25 +29,32 @@ export function CustomerFormModal({ customer, onClose, onSaved }: Props) {
     setError(null)
     const clean: CustomerPayload = {
       customerName: form.customerName.trim(),
+      customerType: form.customerType,
       email: form.email.trim(),
       phone: form.phone.trim(),
       notes: form.notes.trim(),
     }
-    if (clean.customerName === '' || !clean.email.includes('@')) {
-      setError('Please enter a name and a valid email address.')
+    if (clean.customerName === '') {
+      setError('Please enter a name.')
       return
     }
+    // The email is optional, but when it is given it must look like an address.
+    if (clean.email !== '' && !clean.email.includes('@')) {
+      setError('Please enter a valid email address, or leave it empty.')
+      return
+    }
+    let savedId: string | undefined
     try {
       if (customer) {
         await updateCustomer(customer, clean)
       } else {
-        await createCustomer(clean)
+        savedId = await createCustomer(clean)
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The customer could not be saved.')
       return
     }
-    onSaved()
+    onSaved(savedId)
   }
 
   return (
@@ -60,7 +70,17 @@ export function CustomerFormModal({ customer, onClose, onSaved }: Props) {
           />
         </label>
         <label>
-          Email
+          Customer type
+          <select value={form.customerType} onChange={(event) => setForm({ ...form, customerType: event.target.value as CustomerType })}>
+            {CUSTOMER_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {CUSTOMER_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Email (optional)
           <input
             type="email"
             value={form.email}

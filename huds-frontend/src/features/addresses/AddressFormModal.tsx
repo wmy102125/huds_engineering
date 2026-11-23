@@ -11,7 +11,8 @@ interface Props {
   /** The address to edit, or nothing to create a new one. */
   address?: LocalAddress
   onClose: () => void
-  onSaved: () => void
+  /** Gets the id of the address when a new one was created. */
+  onSaved: (serviceAddressId?: string) => void
 }
 
 export function AddressFormModal({ customerId, address, onClose, onSaved }: Props) {
@@ -45,17 +46,18 @@ export function AddressFormModal({ customerId, address, onClose, onSaved }: Prop
       setError('Please fill in the street, city, province, postal code and country code.')
       return
     }
+    let savedId: string | undefined
     try {
       if (address) {
         await updateAddress(address, clean)
       } else {
-        await createAddress(customerId, clean)
+        savedId = await createAddress(customerId, clean)
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The address could not be saved.')
       return
     }
-    onSaved()
+    onSaved(savedId)
   }
 
   return (

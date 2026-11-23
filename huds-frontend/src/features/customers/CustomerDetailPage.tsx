@@ -1,12 +1,19 @@
+import { customerTypeLabel } from './customerLabels'
 import { useCallback, useState } from 'react'
 import { AuditLine } from '../../components/AuditLine'
 import { SyncBadge } from '../../components/SyncBadge'
-import type { LocalAddress, LocalCustomer } from '../../db/db'
+import type { LocalAddress, LocalAppliance, LocalCase, LocalCustomer, LocalModel } from '../../db/db'
 import { useLocalQuery } from '../../db/useLocalQuery'
 import { navigate } from '../../routes/useRoute'
 import type { SyncStatus } from '../../sync/useSyncEngine'
 import { AddressFormModal } from '../addresses/AddressFormModal'
 import { archiveAddress, listAddresses } from '../addresses/addressStore'
+import { ApplianceFormModal } from '../appliances/ApplianceFormModal'
+import { ModelFormModal } from '../appliances/ModelFormModal'
+import { listAppliancesOfCustomer } from '../appliances/applianceStore'
+import { applianceTypeLabel } from '../appliances/applianceTypes'
+import { getModel } from '../appliances/modelStore'
+import { listUnfinishedCasesOfAppliance } from '../cases/caseStore'
 import { CustomerFormModal } from './CustomerFormModal'
 import { archiveCustomer, getCustomer } from './customerStore'
 
@@ -18,23 +25,43 @@ interface Props {
 interface Loaded {
   customer: LocalCustomer | undefined
   addresses: LocalAddress[]
+  appliances: ApplianceRow[]
+}
+
+interface ApplianceRow {
+  appliance: LocalAppliance
+  model: LocalModel | undefined
+  /** At most one in practice: an appliance cannot have a second case while one is unfinished. */
+  unfinished: LocalCase | undefined
 }
 
 /** One customer on top, the customer's service addresses below. */
 export function CustomerDetailPage({ customerId, sync }: Props) {
   const load = useCallback(
-    async (): Promise<Loaded> => ({ customer: await getCustomer(customerId), addresses: await listAddresses(customerId) }),
+    async (): Promise<Loaded> => {
+      const appliances: ApplianceRow[] = []
+      for (const appliance of await listAppliancesOfCustomer(customerId)) {
+        appliances.push({
+          appliance,
+          model: await getModel(appliance.applianceModelId),
+          unfinished: (await listUnfinishedCasesOfAppliance(appliance.applianceId))[0],
+        })
+      }
+      return { customer: await getCustomer(customerId), addresses: await listAddresses(customerId), appliances }
+    },
     [customerId],
   )
   const { data, reload } = useLocalQuery(load, sync.tick)
   const [editingCustomer, setEditingCustomer] = useState(false)
   // "new" opens an empty form; an address opens the form for it; null keeps the dialog closed.
   const [addressForm, setAddressForm] = useState<LocalAddress | 'new' | null>(null)
+  const [applianceFormOpen, setApplianceFormOpen] = useState(false)
+  const [newModelOpen, setNewModelOpen] = useState(false)
 
   if (data === undefined) {
     return <p className="muted">Loading...</p>
   }
-  const { customer, addresses } = data
+  const { customer, addresses, appliances } = data
   if (!customer || customer.archiving) {
     return (
       <section>
@@ -52,7 +79,7 @@ export function CustomerDetailPage({ customerId, sync }: Props) {
   }
 
   const handleArchiveCustomer = async () => {
-    if (!window.confirm(`Archive ${customer.customerName}? The customer's addresses are archived too.`)) {
+    if (!window.confirm(`Archive ${customer.customerName}? The customer's addresses and appliances are archived too. This is refused if the customer has cases.`)) {
       return
     }
     try {
@@ -97,6 +124,8 @@ export function CustomerDetailPage({ customerId, sync }: Props) {
 
       <div className="card">
         <dl className="facts">
+          <dt>Type</dt>
+          <dd>{customerTypeLabel(customer.customerType)}</dd>
           <dt>Phone</dt>
           <dd>{customer.phone || '-'}</dd>
           <dt>Email</dt>
@@ -166,6 +195,81 @@ export function CustomerDetailPage({ customerId, sync }: Props) {
         </table>
       </div>
 
+      <div className="page-head">
+        <h3>Appliances</h3>
+        <div className="actions">
+          <button type="button" onClick={() => setNewModelOpen(true)}>
+            + New appliance model
+          </button>
+          <button type="button" className="primary" onClick={() => setApplianceFormOpen(true)}>
+            + New appliance
+          </button>
+        </div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Serial number</th>
+              <th>Unfinished case</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {appliances.length === 0 && (
+              <tr>
+                <td colSpan={4} className="muted">
+                  No appliances yet.
+                </td>
+              </tr>
+            )}
+            {appliances.map(({ appliance, model, unfinished }) => (
+              <tr key={appliance.applianceId}>
+                <td data-label="Model">
+                  {model ? [applianceTypeLabel(model.applianceType), model.brand, model.modelNo].filter(Boolean).join(' ') : '-'}
+                </td>
+                <td data-label="Serial number">
+                  <a href={`#/my/appliances/items/${appliance.applianceId}`}>
+                    <strong>{appliance.serialNo || '(no serial number)'}</strong>
+                  </a>
+                </td>
+                <td data-label="Unfinished case">
+                  {unfinished ? (
+                    <a href={`#/my/cases/${unfinished.diagnosticCaseId}`}>{unfinished.caseNo || 'number pending'}</a>
+                  ) : (
+                    '-'
+                  )}
+                </td>
+                <td data-label="Status">
+                  <SyncBadge state={appliance.syncState} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {newModelOpen && (
+        <ModelFormModal
+          onClose={() => setNewModelOpen(false)}
+          onSaved={() => {
+            // The new model shows up in the model list of the "New appliance" form.
+            setNewModelOpen(false)
+            saved()
+          }}
+        />
+      )}
+      {applianceFormOpen && (
+        <ApplianceFormModal
+          customerId={customerId}
+          onClose={() => setApplianceFormOpen(false)}
+          onSaved={() => {
+            setApplianceFormOpen(false)
+            saved()
+          }}
+        />
+      )}
       {editingCustomer && (
         <CustomerFormModal
           customer={customer}

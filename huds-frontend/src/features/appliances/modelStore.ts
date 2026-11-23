@@ -12,17 +12,31 @@ export async function listModels(): Promise<LocalModel[]> {
     .sort((a, b) => `${a.applianceType} ${a.brand} ${a.modelNo}`.localeCompare(`${b.applianceType} ${b.brand} ${b.modelNo}`))
 }
 
+/** The content of a model as the server expects it. Used when only one part of the model changes (for example a document). */
+export function modelPayloadOf(model: LocalModel): ApplianceModelPayload {
+  return {
+    applianceType: model.applianceType,
+    brand: model.brand,
+    modelNo: model.modelNo,
+    schematicDocumentId: model.schematicDocumentId,
+    schematicLocation: model.schematicLocation,
+    serviceManualDocumentId: model.serviceManualDocumentId,
+  }
+}
+
 export function getModel(applianceModelId: string): Promise<LocalModel | undefined> {
   return db().models.get(applianceModelId)
 }
 
-export async function createModel(form: ApplianceModelPayload): Promise<void> {
+/** Returns the id of the new model. */
+export async function createModel(form: ApplianceModelPayload): Promise<string> {
   const database = db()
   const applianceModelId = crypto.randomUUID()
   await database.transaction('rw', database.models, database.outbox, async () => {
     await database.models.add({ applianceModelId, ...form, syncState: 'PENDING' })
     await enqueueMutation({ entityType: 'APPLIANCE_MODEL', entityId: applianceModelId, operation: 'CREATE', payload: form })
   })
+  return applianceModelId
 }
 
 export async function updateModel(model: LocalModel, form: ApplianceModelPayload): Promise<void> {

@@ -3,6 +3,7 @@ import type { PushMutation, PushRequest, PushResponse, PushResult } from '../api
 import { db } from '../db/db'
 import type { OutboxItem } from '../db/db'
 import { applyAcceptedLocal, markSyncState } from './localRecords'
+import { outboxOfRecord } from './outbox'
 
 const MAX_BATCH = 100
 const MAX_ROUNDS = 10
@@ -58,27 +59,68 @@ export async function syncNow(userId: string): Promise<SyncOutcome> {
 /**
  * Takes the oldest waiting change of every record. The server accepts only one change per record
  * in a request, and a later change may need the row version that comes back from the earlier one.
+ * The server tells records apart by id alone, so two records of different types that share an id (a visit and its
+ * safety checks) cannot be in the same request either; the later one is sent in the next round.
  */
 async function pickBatch(): Promise<OutboxItem[]> {
   const waiting = await db().outbox.where('status').anyOf('PENDING', 'BLOCKED').sortBy('seq')
+  const refused = await db().outbox.where('status').equals('REJECTED').toArray()
+  // The key has the type in it: the safety checks of a visit have the id of the visit.
+  const recordKey = (item: OutboxItem) => `${item.entityType}:${item.entityId}`
+  const refusedRecords = new Set(refused.map(recordKey))
   const seenRecords = new Set<string>()
-  const batch: OutboxItem[] = []
+  const idsInBatch = new Set<string>()
+  const candidates: OutboxItem[] = []
   for (const item of waiting) {
-    if (seenRecords.has(item.entityId)) {
+    if (seenRecords.has(recordKey(item))) {
       continue
     }
-    seenRecords.add(item.entityId)
+    seenRecords.add(recordKey(item))
+    // A later change was made on top of the refused one and would fail as well. It waits until the user has decided about the refused change.
+    if (refusedRecords.has(recordKey(item))) {
+      continue
+    }
     // UPDATE and ARCHIVE must say which version they are based on. It is not known yet
-    // while the record's CREATE has not been accepted.
-    if (item.operation !== 'CREATE' && item.rowVersion === undefined) {
+    // while the record's CREATE has not been accepted. A REGISTER creates a record, so it has no version either.
+    if (item.operation !== 'CREATE' && item.operation !== 'REGISTER' && item.rowVersion === undefined) {
       continue
     }
-    batch.push(item)
-    if (batch.length === MAX_BATCH) {
-      break
+    // Another record with the same id is already in this request.
+    if (idsInBatch.has(item.entityId)) {
+      continue
+    }
+    idsInBatch.add(item.entityId)
+    candidates.push(item)
+  }
+  return (await orderByDependencies(candidates)).slice(0, MAX_BATCH)
+}
+
+/**
+ * Puts every change after the changes it depends on. The queue order is the order in which changes were made, but a change can
+ * come to depend on one queued after it (a model that was created offline and gets a schematic afterwards). The server needs
+ * the dependency earlier in the request or already processed, so a change whose dependency is still waiting somewhere else
+ * (another record's later change, or a refused one) is left for a later round.
+ */
+async function orderByDependencies(candidates: OutboxItem[]): Promise<OutboxItem[]> {
+  const stillQueued = new Set((await db().outbox.toArray()).map((item) => item.mutationId))
+  const ordered: OutboxItem[] = []
+  const placed = new Set<string>()
+  let progress = true
+  while (progress) {
+    progress = false
+    for (const item of candidates) {
+      if (placed.has(item.mutationId)) {
+        continue
+      }
+      // A dependency that left the queue was accepted already.
+      if (item.dependsOn.every((id) => !stillQueued.has(id) || placed.has(id))) {
+        ordered.push(item)
+        placed.add(item.mutationId)
+        progress = true
+      }
     }
   }
-  return batch
+  return ordered
 }
 
 function toPushMutation(item: OutboxItem): PushMutation {
@@ -142,11 +184,30 @@ async function sendBatch(userId: string, batch: OutboxItem[]): Promise<SyncOutco
 /** The server accepted a change: remove it from the outbox and bring the local record up to date. */
 async function applyAccepted(item: OutboxItem, result: PushResult): Promise<void> {
   const database = db()
-  await database.transaction('rw', database.outbox, database.customers, database.addresses, database.models, database.appliances, async () => {
+  const tables = [
+    database.outbox,
+    database.customers,
+    database.addresses,
+    database.models,
+    database.appliances,
+    database.cases,
+    database.caseErrorCodes,
+    database.caseParts,
+    database.visits,
+    database.visitSafetyChecks,
+    database.diagnosticSteps,
+    database.visitCompletions,
+    database.caseSummaries,
+    database.caseInvoices,
+    database.caseInvoicePayments,
+    database.attachments,
+    database.applianceDocuments,
+  ]
+  await database.transaction('rw', tables, async () => {
     await database.outbox.delete(item.seq)
 
     // Later changes of the same record were waiting for this version number.
-    const later = await database.outbox.where('entityId').equals(item.entityId).toArray()
+    const later = await outboxOfRecord(item.entityType, item.entityId)
     for (const other of later) {
       if (other.status !== 'REJECTED' && other.operation !== 'CREATE' && result.rowVersion !== undefined) {
         await database.outbox.update(other.seq, { rowVersion: result.rowVersion })

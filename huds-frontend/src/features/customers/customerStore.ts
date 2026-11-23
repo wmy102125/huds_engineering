@@ -2,6 +2,7 @@ import type { CustomerPayload } from '../../api/types'
 import { db } from '../../db/db'
 import type { LocalCustomer } from '../../db/db'
 import { enqueueMutation } from '../../sync/outbox'
+import { countCasesOf } from '../cases/caseStore'
 
 /**
  * Every change is written in two places inside ONE local transaction: the local customer
@@ -17,7 +18,8 @@ export function getCustomer(customerId: string): Promise<LocalCustomer | undefin
   return db().customers.get(customerId)
 }
 
-export async function createCustomer(form: CustomerPayload): Promise<void> {
+/** Returns the id of the new customer. */
+export async function createCustomer(form: CustomerPayload): Promise<string> {
   const database = db()
   // The id is made here, on the device, because the server cannot be asked while offline.
   const customerId = crypto.randomUUID()
@@ -25,6 +27,7 @@ export async function createCustomer(form: CustomerPayload): Promise<void> {
     await database.customers.add({ customerId, ...form, syncState: 'PENDING' })
     await enqueueMutation({ entityType: 'CUSTOMER', entityId: customerId, operation: 'CREATE', payload: form })
   })
+  return customerId
 }
 
 export async function updateCustomer(customer: LocalCustomer, form: CustomerPayload): Promise<void> {
@@ -43,7 +46,11 @@ export async function updateCustomer(customer: LocalCustomer, form: CustomerPayl
 
 export async function archiveCustomer(customer: LocalCustomer): Promise<void> {
   const database = db()
-  await database.transaction('rw', database.customers, database.addresses, database.outbox, async () => {
+  // The server refuses to archive a customer that has cases, so do not even try.
+  if ((await countCasesOf('customerId', customer.customerId)) > 0) {
+    throw new Error('This customer has cases and cannot be archived.')
+  }
+  await database.transaction('rw', database.customers, database.addresses, database.appliances, database.outbox, async () => {
     const result = await enqueueMutation({
       entityType: 'CUSTOMER',
       entityId: customer.customerId,
@@ -52,8 +59,16 @@ export async function archiveCustomer(customer: LocalCustomer): Promise<void> {
     })
     if (result === 'DISCARDED') {
       // The server never saw this customer, so there is nothing to archive there.
-      // Addresses that were added to it in the meantime never existed on the server either.
+      // Addresses and appliances that were added to it in the meantime never existed on the server either.
       await database.customers.delete(customer.customerId)
+      const appliances = await database.appliances.where('customerId').equals(customer.customerId).toArray()
+      for (const appliance of appliances) {
+        await database.appliances.delete(appliance.applianceId)
+        const queued = await database.outbox.where('entityId').equals(appliance.applianceId).toArray()
+        for (const item of queued) {
+          await database.outbox.delete(item.seq)
+        }
+      }
       const addresses = await database.addresses.where('customerId').equals(customer.customerId).toArray()
       for (const address of addresses) {
         await database.addresses.delete(address.serviceAddressId)

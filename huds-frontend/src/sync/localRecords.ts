@@ -22,6 +22,42 @@ export async function markSyncState(entityType: SyncEntityType, entityId: string
     case 'APPLIANCE':
       await db().appliances.update(entityId, { syncState: state })
       break
+    case 'CASE':
+      await db().cases.update(entityId, { syncState: state })
+      break
+    case 'CASE_ERROR_CODE':
+      await db().caseErrorCodes.update(entityId, { syncState: state })
+      break
+    case 'CASE_PART':
+      await db().caseParts.update(entityId, { syncState: state })
+      break
+    case 'SERVICE_VISIT':
+      await db().visits.update(entityId, { syncState: state })
+      break
+    case 'VISIT_SAFETY_CHECK':
+      await db().visitSafetyChecks.update(entityId, { syncState: state })
+      break
+    case 'DIAGNOSTIC_STEP':
+      await db().diagnosticSteps.update(entityId, { syncState: state })
+      break
+    case 'VISIT_COMPLETION':
+      await db().visitCompletions.update(entityId, { syncState: state })
+      break
+    case 'CASE_SUMMARY':
+      await db().caseSummaries.update(entityId, { syncState: state })
+      break
+    case 'CASE_INVOICE':
+      await db().caseInvoices.update(entityId, { syncState: state })
+      break
+    case 'CASE_INVOICE_PAYMENT':
+      await db().caseInvoicePayments.update(entityId, { syncState: state })
+      break
+    case 'ATTACHMENT':
+      await db().attachments.update(entityId, { syncState: state })
+      break
+    case 'APPLIANCE_DOCUMENT':
+      await db().applianceDocuments.update(entityId, { syncState: state })
+      break
   }
 }
 
@@ -43,6 +79,42 @@ export async function clearLocalChange(entityType: SyncEntityType, entityId: str
       break
     case 'APPLIANCE':
       await db().appliances.update(entityId, changes)
+      break
+    case 'CASE':
+      await db().cases.update(entityId, changes)
+      break
+    case 'CASE_ERROR_CODE':
+      await db().caseErrorCodes.update(entityId, changes)
+      break
+    case 'CASE_PART':
+      await db().caseParts.update(entityId, changes)
+      break
+    case 'SERVICE_VISIT':
+      await db().visits.update(entityId, changes)
+      break
+    case 'VISIT_SAFETY_CHECK':
+      await db().visitSafetyChecks.update(entityId, changes)
+      break
+    case 'DIAGNOSTIC_STEP':
+      await db().diagnosticSteps.update(entityId, changes)
+      break
+    case 'VISIT_COMPLETION':
+      await db().visitCompletions.update(entityId, changes)
+      break
+    case 'CASE_SUMMARY':
+      await db().caseSummaries.update(entityId, changes)
+      break
+    case 'CASE_INVOICE':
+      await db().caseInvoices.update(entityId, changes)
+      break
+    case 'CASE_INVOICE_PAYMENT':
+      await db().caseInvoicePayments.update(entityId, changes)
+      break
+    case 'ATTACHMENT':
+      await db().attachments.update(entityId, changes)
+      break
+    case 'APPLIANCE_DOCUMENT':
+      await db().applianceDocuments.update(entityId, changes)
       break
   }
 }
@@ -73,6 +145,42 @@ export async function applyAcceptedLocal(
     case 'APPLIANCE':
       await db().appliances.update(entityId, { rowVersion, syncState })
       break
+    case 'CASE':
+      await db().cases.update(entityId, { rowVersion, syncState })
+      break
+    case 'CASE_ERROR_CODE':
+      await db().caseErrorCodes.update(entityId, { rowVersion, syncState })
+      break
+    case 'CASE_PART':
+      await db().caseParts.update(entityId, { rowVersion, syncState })
+      break
+    case 'SERVICE_VISIT':
+      await db().visits.update(entityId, { rowVersion, syncState })
+      break
+    case 'VISIT_SAFETY_CHECK':
+      await db().visitSafetyChecks.update(entityId, { rowVersion, syncState })
+      break
+    case 'DIAGNOSTIC_STEP':
+      await db().diagnosticSteps.update(entityId, { rowVersion, syncState })
+      break
+    case 'VISIT_COMPLETION':
+      await db().visitCompletions.update(entityId, { rowVersion, syncState })
+      break
+    case 'CASE_SUMMARY':
+      await db().caseSummaries.update(entityId, { rowVersion, syncState })
+      break
+    case 'CASE_INVOICE':
+      await db().caseInvoices.update(entityId, { rowVersion, syncState })
+      break
+    case 'CASE_INVOICE_PAYMENT':
+      await db().caseInvoicePayments.update(entityId, { rowVersion, syncState })
+      break
+    case 'ATTACHMENT':
+      await db().attachments.update(entityId, { rowVersion, syncState })
+      break
+    case 'APPLIANCE_DOCUMENT':
+      await db().applianceDocuments.update(entityId, { rowVersion, syncState })
+      break
   }
 }
 
@@ -90,6 +198,46 @@ export async function deleteLocal(entityType: SyncEntityType, entityId: string):
       break
     case 'APPLIANCE':
       await db().appliances.delete(entityId)
+      break
+    case 'CASE':
+      await db().cases.delete(entityId)
+      break
+    case 'CASE_ERROR_CODE':
+      await db().caseErrorCodes.delete(entityId)
+      break
+    case 'CASE_PART':
+      await db().caseParts.delete(entityId)
+      break
+    case 'SERVICE_VISIT':
+      await db().visits.delete(entityId)
+      break
+    case 'VISIT_SAFETY_CHECK':
+      await db().visitSafetyChecks.delete(entityId)
+      break
+    case 'DIAGNOSTIC_STEP':
+      await db().diagnosticSteps.delete(entityId)
+      break
+    case 'VISIT_COMPLETION':
+      await db().visitCompletions.delete(entityId)
+      break
+    case 'CASE_SUMMARY':
+      await db().caseSummaries.delete(entityId)
+      break
+    case 'CASE_INVOICE':
+      await db().caseInvoices.delete(entityId)
+      break
+    case 'CASE_INVOICE_PAYMENT':
+      await db().caseInvoicePayments.delete(entityId)
+      break
+    case 'ATTACHMENT':
+      await db().attachments.delete(entityId)
+      // The file that waited for its upload is of no use any more.
+      await db().attachmentFiles.delete(entityId)
+      break
+    case 'APPLIANCE_DOCUMENT':
+      await db().applianceDocuments.delete(entityId)
+      // The file that waited for its upload is of no use any more.
+      await db().applianceDocumentFiles.delete(entityId)
       break
   }
 }

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../api/http'
 import { countWaiting } from './outbox'
+import { uploadWaiting } from './attachmentUpload'
+import { uploadWaitingDocuments } from './applianceDocumentUpload'
 import { pullAll } from './pull'
 import { syncNow } from './syncEngine'
 
@@ -32,6 +34,9 @@ export function useSyncEngine(userId: string): SyncStatus {
     try {
       const outcome = await syncNow(userId)
       await pullAll()
+      // After the download: the server may already know that a file was uploaded (an earlier run that was interrupted).
+      await uploadWaiting(() => setTick((value) => value + 1))
+      await uploadWaitingDocuments(() => setTick((value) => value + 1))
       setOnline(true)
       setMessage(outcome.rejected > 0 ? 'Some changes were refused by the server.' : null)
     } catch (error) {
@@ -39,6 +44,8 @@ export function useSyncEngine(userId: string): SyncStatus {
         setOnline(false)
         setMessage(null)
       } else {
+        // Keep the real cause visible: the message on the screen is short.
+        console.error('Sync failed:', error)
         setMessage(error instanceof ApiError ? error.message : 'Sync failed.')
       }
     } finally {

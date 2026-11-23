@@ -19,6 +19,7 @@ const MENU = [
   { path: '/my/customers', label: 'Customers' },
   { path: '/my/appliances', label: 'Appliances' },
   { path: '/my/cases', label: 'Cases' },
+  { path: '/my/visits', label: 'My visits' },
 ]
 
 /** The frame of the "My" area: header with sync status, the menu, and the page. */

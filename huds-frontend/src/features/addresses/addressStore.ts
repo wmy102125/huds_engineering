@@ -2,6 +2,7 @@ import type { ServiceAddressPayload } from '../../api/types'
 import { db } from '../../db/db'
 import type { LocalAddress } from '../../db/db'
 import { enqueueMutation, findCreateMutationId } from '../../sync/outbox'
+import { countCasesOf } from '../cases/caseStore'
 
 /** Same pattern as the customer store: the local record and the outbox change are saved in one transaction. */
 
@@ -12,7 +13,8 @@ export async function listAddresses(customerId: string): Promise<LocalAddress[]>
 
 export type AddressForm = Omit<ServiceAddressPayload, 'customerId'>
 
-export async function createAddress(customerId: string, form: AddressForm): Promise<void> {
+/** Returns the id of the new address. */
+export async function createAddress(customerId: string, form: AddressForm): Promise<string> {
   const database = db()
   const serviceAddressId = crypto.randomUUID()
   await database.transaction('rw', database.addresses, database.outbox, async () => {
@@ -34,6 +36,7 @@ export async function createAddress(customerId: string, form: AddressForm): Prom
       dependsOn: customerCreate ? [customerCreate] : [],
     })
   })
+  return serviceAddressId
 }
 
 export async function updateAddress(address: LocalAddress, form: AddressForm): Promise<void> {
@@ -56,6 +59,10 @@ export async function updateAddress(address: LocalAddress, form: AddressForm): P
 
 export async function archiveAddress(address: LocalAddress): Promise<void> {
   const database = db()
+  // The server refuses to archive an address that a case refers to, so do not even try.
+  if ((await countCasesOf('serviceAddressId', address.serviceAddressId)) > 0) {
+    throw new Error('This address is used by a case and cannot be archived.')
+  }
   await database.transaction('rw', database.addresses, database.outbox, async () => {
     const result = await enqueueMutation({
       entityType: 'SERVICE_ADDRESS',
